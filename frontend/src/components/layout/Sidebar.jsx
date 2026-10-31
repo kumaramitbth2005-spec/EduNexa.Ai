@@ -9,7 +9,8 @@ import {
 
 const studentNav = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/courses', icon: BookOpen, label: 'Courses' },
+  { to: '/my-learning', icon: Award, label: 'My Learning' },
+  { to: '/courses', icon: BookOpen, label: 'Explore Courses' },
   { to: '/subject-notes', icon: FileText, label: 'Subject Notes' },
   { to: '/dsa', icon: Terminal, label: 'DSA Studio' },
   { to: '/practice', icon: Zap, label: 'AI Practice' },

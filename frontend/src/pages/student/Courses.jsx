@@ -8,12 +8,18 @@ import toast from 'react-hot-toast';
 
 const CATEGORIES = [
   { id: '', name: 'All Categories' },
-  { id: 'programming', name: 'Programming' },
-  { id: 'web-dev', name: 'Web Development' },
-  { id: 'dsa', name: 'Data Structures & Algorithms' },
-  { id: 'ai-ml', name: 'AI & Machine Learning' },
-  { id: 'database', name: 'Databases' },
-  { id: 'cloud', name: 'Cloud Computing' },
+  { id: 'programming', name: '1. Programming' },
+  { id: 'web-dev', name: '2. Web Development' },
+  { id: 'dsa', name: '3. Data Structures & Algorithms' },
+  { id: 'ai-ml', name: '4. AI & Machine Learning' },
+  { id: 'database', name: '5. Databases' },
+  { id: 'cloud', name: '6. Cloud Computing' },
+  { id: 'cybersecurity', name: '7. Cybersecurity' },
+  { id: 'software-eng', name: '8. Software Engineering' },
+  { id: 'computer-networks', name: '9. Computer Networks' },
+  { id: 'mobile-dev', name: '10. Mobile App Development' },
+  { id: 'devops', name: '11. DevOps' },
+  { id: 'data-science', name: '12. Data Science' },
 ];
 
 export default function Courses() {
@@ -162,17 +168,27 @@ export default function Courses() {
                     {course.description}
                   </p>
 
+                  {/* Curriculum Badges */}
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[11px] font-semibold">
+                      {course.duration || '40+ hours'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold">
+                      22 Assignments
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[11px] font-semibold">
+                      50 MCQs
+                    </span>
+                  </div>
+
                   <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-500">
                     <div className="flex items-center gap-2">
                       <User className="w-3.5 h-3.5 text-gray-400" />
                       <span className="truncate max-w-[120px] font-medium">{course.teacher?.name || 'Verified Faculty'}</span>
                     </div>
-                    {course.semester && (
-                      <span className="inline-flex items-center gap-1">
-                        <Layers className="w-3.5 h-3.5 text-gray-400" />
-                        Sem {course.semester}
-                      </span>
-                    )}
+                    <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                      Certificate Included
+                    </span>
                   </div>
                 </div>
               </div>

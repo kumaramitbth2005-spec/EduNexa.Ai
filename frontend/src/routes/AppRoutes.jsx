@@ -16,6 +16,13 @@ const VerifyEmail = lazy(() => import('../pages/auth/VerifyEmail'));
 const StudentDashboard = lazy(() => import('../pages/student/Dashboard'));
 const CoursesPage = lazy(() => import('../pages/student/Courses'));
 const CourseDetail = lazy(() => import('../pages/student/CourseDetail'));
+const CourseEnrollmentForm = lazy(() => import('../pages/student/CourseEnrollmentForm'));
+const CourseLearning = lazy(() => import('../pages/student/CourseLearning'));
+const CourseAssignments = lazy(() => import('../pages/student/CourseAssignments'));
+const CourseAssessment = lazy(() => import('../pages/student/CourseAssessment'));
+const CertificatePage = lazy(() => import('../pages/student/CertificatePage'));
+const MyLearning = lazy(() => import('../pages/student/MyLearning'));
+const VerifyCertificate = lazy(() => import('../pages/student/VerifyCertificate'));
 const MaterialsPage = lazy(() => import('../pages/student/Materials'));
 const ProfilePage = lazy(() => import('../pages/student/Profile'));
 const SubjectNotes = lazy(() => import('../pages/student/SubjectNotes'));
@@ -90,6 +97,7 @@ export default function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/verify-email/:token" element={<VerifyEmail />} />
+        <Route path="/verify-certificate/:certificateId?" element={<VerifyCertificate />} />
 
         {/* Student Routes */}
         <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
@@ -97,10 +105,21 @@ export default function AppRoutes() {
           <Route path="profile" element={<ProfilePage />} />
         </Route>
 
+        <Route path="/my-learning" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+          <Route index element={<MyLearning />} />
+        </Route>
+
         <Route path="/courses" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<CoursesPage />} />
           <Route path=":id" element={<CourseDetail />} />
+          <Route path=":id/enroll" element={<CourseEnrollmentForm />} />
+          <Route path=":id/assignments" element={<CourseAssignments />} />
+          <Route path=":id/assessment" element={<CourseAssessment />} />
+          <Route path=":id/certificate" element={<CertificatePage />} />
         </Route>
+
+        {/* Dedicated Fullscreen Learning Experience */}
+        <Route path="/courses/:id/learn" element={<ProtectedRoute><CourseLearning /></ProtectedRoute>} />
 
         <Route path="/materials" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<MaterialsPage />} />

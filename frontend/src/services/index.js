@@ -29,11 +29,30 @@ export const courseService = {
   createCourse: (data) => api.post('/courses', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
   updateCourse: (id, data) => api.put(`/courses/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
   deleteCourse: (id) => api.delete(`/courses/${id}`),
-  enrollCourse: (id) => api.post(`/courses/${id}/enroll`),
+  enrollCourse: (id, data = {}) => api.post(`/courses/${id}/enroll`, data),
+  getCourseCurriculum: (id) => api.get(`/courses/${id}/curriculum`),
+  getEnrollmentDetails: (id) => api.get(`/courses/${id}/enrollment`),
+  getLessonDetails: (courseId, lessonId) => api.get(`/courses/${courseId}/lessons/${lessonId}`),
   getCourseProgress: (id) => api.get(`/courses/${id}/progress`),
   completeLesson: (courseId, lessonId) => api.post(`/courses/${courseId}/lessons/${lessonId}/complete`),
+  getCourseAssignments: (id) => api.get(`/courses/${id}/assignments`),
+  getCourseAssessment: (id) => api.get(`/courses/${id}/assessment`),
+  submitCourseAssessment: (id, data) => api.post(`/courses/${id}/assessment/submit`, data),
+  getAssessmentResult: (id) => api.get(`/courses/${id}/assessment/result`),
+  checkCertificateEligibility: (id) => api.get(`/courses/${id}/certificate/eligibility`),
+  generateCertificate: (id) => api.post(`/courses/${id}/certificate/generate`),
   getTeacherCourses: () => api.get('/courses/teacher/my-courses'),
   getEnrolledCourses: () => api.get('/courses/student/enrolled'),
+};
+
+export const assignmentService = {
+  getAssignment: (id) => api.get(`/assignments/${id}`),
+  submitAssignment: (id, data) => api.post(`/assignments/${id}/submit`, data, { timeout: 45000 }),
+};
+
+export const certificateService = {
+  getCertificate: (certificateId) => api.get(`/certificates/${certificateId}`),
+  verifyCertificate: (certificateId) => api.get(`/certificates/verify/${certificateId}`),
 };
 
 export const examService = {

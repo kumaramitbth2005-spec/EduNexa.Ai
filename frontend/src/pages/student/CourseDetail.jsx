@@ -57,18 +57,8 @@ export default function CourseDetail() {
     }
   };
 
-  const handleEnroll = async () => {
-    try {
-      setEnrolling(true);
-      await courseService.enrollCourse(id);
-      toast.success('Successfully enrolled in course!');
-      setIsEnrolled(true);
-      fetchCourseDetails();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Enrollment failed');
-    } finally {
-      setEnrolling(false);
-    }
+  const handleEnroll = () => {
+    navigate(`/courses/${id}/enroll`);
   };
 
   const handleCompleteLesson = async (lessonId) => {
@@ -177,20 +167,48 @@ export default function CourseDetail() {
           {/* Enroll / Progress CTA */}
           <div className="pt-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             {isEnrolled ? (
-              <div className="w-full max-w-md bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/15">
-                <ProgressBar value={progress} showLabel color="green" />
-                <p className="text-xs text-emerald-300 mt-2 font-medium flex items-center gap-1.5">
-                  <CheckCircle className="w-4 h-4" />
-                  You are currently enrolled in this course
-                </p>
+              <div className="w-full max-w-lg bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/15 space-y-3">
+                <div className="flex items-center justify-between text-xs text-white/90">
+                  <span className="font-semibold">Course Progress</span>
+                  <span className="font-bold text-emerald-300">{progress}% Completed</span>
+                </div>
+                <ProgressBar value={progress} color="green" />
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    onClick={() => navigate(`/courses/${id}/learn`)}
+                    className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-md shadow-primary-500/30"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    Continue Learning
+                  </button>
+                  <button
+                    onClick={() => navigate(`/courses/${id}/assignments`)}
+                    className="px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold backdrop-blur-sm transition-all"
+                  >
+                    22 Assignments
+                  </button>
+                  <button
+                    onClick={() => navigate(`/courses/${id}/assessment`)}
+                    className="px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold backdrop-blur-sm transition-all"
+                  >
+                    50-MCQ Exam
+                  </button>
+                  <button
+                    onClick={() => navigate(`/courses/${id}/certificate`)}
+                    className="px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 text-xs font-semibold transition-all flex items-center gap-1"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    Certificate
+                  </button>
+                </div>
               </div>
             ) : (
               <button
                 onClick={handleEnroll}
-                disabled={enrolling}
-                className="btn-primary text-base px-8 py-3 rounded-xl shadow-lg shadow-primary-500/40"
+                className="btn-primary text-base px-8 py-3 rounded-xl shadow-lg shadow-primary-500/40 flex items-center gap-2"
               >
-                {enrolling ? 'Enrolling...' : 'Enroll in Course for Free'}
+                Enroll in Course (Official Form)
+                <ArrowRight className="w-4 h-4" />
               </button>
             )}
           </div>

@@ -28,6 +28,8 @@ require('./models/StudyTask');
 require('./models/SavedNote');
 require('./models/PracticeSession');
 require('./models/TopicMastery');
+require('./models/Assignment');
+require('./models/Certificate');
 
 // Route imports
 const authRoutes = require('./routes/auth');
@@ -45,6 +47,8 @@ const notesRoutes = require('./routes/notes');
 const subjectNotesRoutes = require('./routes/subjectNotes');
 const dsaRoutes = require('./routes/dsa');
 const practiceRoutes = require('./routes/practice');
+const assignmentRoutes = require('./routes/assignments');
+const certificateRoutes = require('./routes/certificates');
 
 const app = express();
 const server = http.createServer(app);
@@ -183,6 +187,8 @@ app.use('/api/notes', notesRoutes);
 app.use('/api/subject-notes', subjectNotesRoutes);
 app.use('/api/dsa', dsaRoutes);
 app.use('/api/practice', practiceRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/certificates', certificateRoutes);
 
 // 404
 app.use((req, res) => {

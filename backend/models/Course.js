@@ -14,7 +14,21 @@ const courseSchema = new mongoose.Schema(
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     category: {
       type: String,
-      enum: ['programming', 'web-dev', 'data-science', 'ai-ml', 'cybersecurity', 'mobile-dev', 'database', 'cloud', 'dsa', 'other'],
+      enum: [
+        'programming',
+        'web-dev',
+        'dsa',
+        'ai-ml',
+        'database',
+        'cloud',
+        'cybersecurity',
+        'software-eng',
+        'computer-networks',
+        'mobile-dev',
+        'devops',
+        'data-science',
+        'other',
+      ],
       required: true,
     },
     tags: [{ type: String }],
@@ -28,7 +42,26 @@ const courseSchema = new mongoose.Schema(
     enrollmentCount: { type: Number, default: 0 },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     totalRatings: { type: Number, default: 0 },
-    duration: { type: String, default: '' }, // e.g. "12 hours"
+    duration: { type: String, default: '' }, // e.g. "45 hours"
+    passingScore: { type: Number, default: 70 }, // % required to pass 50-MCQ assessment
+    totalAssignments: { type: Number, default: 22 },
+    totalAssessmentQuestions: { type: Number, default: 50 },
+    instructorSource: { type: String, default: 'EduNexa Academic Board' },
+    modules: [
+      {
+        moduleIndex: { type: Number, required: true },
+        title: { type: String, required: true },
+        description: { type: String, default: '' },
+        topics: [
+          {
+            topicIndex: { type: Number, required: true },
+            title: { type: String, required: true },
+            summary: { type: String, default: '' },
+            lesson: { type: mongoose.Schema.Types.ObjectId, ref: 'Lesson' },
+          },
+        ],
+      },
+    ],
     prerequisites: [{ type: String }],
     outcomes: [{ type: String }],
     requirements: [{ type: String }],
