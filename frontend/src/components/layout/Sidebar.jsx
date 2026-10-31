@@ -12,6 +12,7 @@ const studentNav = [
   { to: '/courses', icon: BookOpen, label: 'Courses' },
   { to: '/subject-notes', icon: FileText, label: 'Subject Notes' },
   { to: '/dsa', icon: Terminal, label: 'DSA Studio' },
+  { to: '/practice', icon: Zap, label: 'AI Practice' },
   { to: '/materials', icon: Layers, label: 'Study Materials' },
   { to: '/exams', icon: PenSquare, label: 'Examinations' },
   { to: '/ai/tutor', icon: Brain, label: 'AI Tutor' },

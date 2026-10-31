@@ -14,3 +14,4 @@ router.get('/topics/:topicId', optionalAuth, getTopicDetail);
 router.post('/topics/:topicId/progress', protect, updateTopicProgress);
 
 module.exports = router;
+

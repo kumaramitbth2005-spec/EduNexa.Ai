@@ -18,3 +18,4 @@ router.post('/', protect, authorize('teacher', 'admin'), createSubjectNote);
 router.put('/:id', protect, authorize('teacher', 'admin'), updateSubjectNote);
 
 module.exports = router;
+

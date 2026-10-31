@@ -131,3 +131,13 @@ export const dsaService = {
   updateProgress: (topicId, data) => api.post(`/dsa/topics/${topicId}/progress`, data),
 };
 
+export const practiceService = {
+  generatePractice: (data) => api.post('/practice/generate', data),
+  submitPractice: (id, data) => api.post(`/practice/${id}/submit`, data),
+  getSessions: (params) => api.get('/practice/sessions', { params }),
+  getSessionDetail: (id) => api.get(`/practice/${id}`),
+  getAnalytics: () => api.get('/practice/analytics'),
+  trackTopicActivity: (data) => api.post('/practice/track-activity', data),
+};
+
+

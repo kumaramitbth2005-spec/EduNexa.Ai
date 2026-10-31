@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { subjectNotesService } from '../../services';
+import { useNavigate } from 'react-router-dom';
+import { subjectNotesService, practiceService } from '../../services';
 import SkeletonCard from '../../components/common/SkeletonCard';
 import EmptyState from '../../components/common/EmptyState';
 import {
   BookOpen, Search, Filter, Layers, Bookmark, CheckCircle2,
   ChevronRight, Sparkles, HelpCircle, FileText, Check, Award,
-  Volume2, Eye, ArrowLeft, ExternalLink, Globe, Star
+  Volume2, Eye, ArrowLeft, ExternalLink, Globe, Star, Zap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function SubjectNotes() {
+  const navigate = useNavigate();
   const [notes, setNotes] = useState([]);
   const [hierarchy, setHierarchy] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +62,13 @@ export default function SubjectNotes() {
     try {
       const res = await subjectNotesService.getNoteById(noteId);
       setSelectedNote(res.data.note);
+      if (res.data.note?.topic) {
+        practiceService.trackTopicActivity({
+          topic: res.data.note.topic,
+          subject: res.data.note.subject || 'Computer Science',
+          action: 'studied',
+        }).catch(() => {});
+      }
       if (res.data.progress) {
         setUserProgress((prev) => ({
           ...prev,
@@ -300,8 +309,16 @@ export default function SubjectNotes() {
                 </div>
               </div>
 
-              {/* Language & Completion Actions */}
-              <div className="flex items-center gap-2">
+              {/* Language, Practice & Completion Actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => navigate(`/practice?topic=${encodeURIComponent(selectedNote.topic)}`)}
+                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+                  title="Practice this topic with AI questions, MCQs, and rubric evaluation"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-current" />
+                  <span>AI Practice</span>
+                </button>
                 <button
                   onClick={() => setLanguageMode(languageMode === 'en' ? 'hi' : 'en')}
                   className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1 font-semibold"
@@ -448,3 +465,4 @@ export default function SubjectNotes() {
     </div>
   );
 }
+

@@ -21,6 +21,11 @@ const ProfilePage = lazy(() => import('../pages/student/Profile'));
 const SubjectNotes = lazy(() => import('../pages/student/SubjectNotes'));
 const DsaLearning = lazy(() => import('../pages/student/DsaLearning'));
 
+// Practice & Mastery
+const PracticeDashboard = lazy(() => import('../pages/practice/PracticeDashboard'));
+const PracticeSession = lazy(() => import('../pages/practice/PracticeSession'));
+const PracticeReport = lazy(() => import('../pages/practice/PracticeReport'));
+
 // AI
 const AITutor = lazy(() => import('../pages/ai/AITutor'));
 const PDFSummarizer = lazy(() => import('../pages/ai/PDFSummarizer'));
@@ -107,6 +112,12 @@ export default function AppRoutes() {
 
         <Route path="/dsa" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<DsaLearning />} />
+        </Route>
+
+        <Route path="/practice" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+          <Route index element={<PracticeDashboard />} />
+          <Route path="session/:id" element={<PracticeSession />} />
+          <Route path="report/:id" element={<PracticeReport />} />
         </Route>
 
         <Route path="/ai" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>

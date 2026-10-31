@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { dsaService } from '../../services';
+import { useNavigate } from 'react-router-dom';
+import { dsaService, practiceService } from '../../services';
 import SkeletonCard from '../../components/common/SkeletonCard';
 import ProgressBar from '../../components/ui/ProgressBar';
 import {
   Code, Terminal, CheckCircle2, Clock, Award, ChevronRight,
   BookOpen, Sparkles, AlertCircle, Copy, Check, ArrowRight,
-  HelpCircle, Eye, ExternalLink, Globe, Layers, Bookmark
+  HelpCircle, Eye, ExternalLink, Globe, Layers, Bookmark, Zap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function DsaLearning() {
+  const navigate = useNavigate();
   const [modules, setModules] = useState([]);
   const [selectedModuleId, setSelectedModuleId] = useState(2);
   const [topics, setTopics] = useState([]);
@@ -63,6 +65,14 @@ export default function DsaLearning() {
     try {
       const res = await dsaService.getTopicDetail(topicId);
       setSelectedTopic(res.data.topic);
+      // Track activity for adaptive recommendations
+      if (res.data.topic?.title) {
+        practiceService.trackTopicActivity({
+          topic: res.data.topic.title,
+          subject: `DSA – ${res.data.topic.moduleTitle || 'Algorithms'}`,
+          action: 'studied',
+        }).catch(() => {});
+      }
       if (res.data.progress) {
         setUserProgress((prev) => ({
           ...prev,
@@ -214,15 +224,25 @@ export default function DsaLearning() {
                   </h2>
                 </div>
 
-                <button
-                  onClick={() => toggleCompleted(selectedTopic.topicId, userProgress[selectedTopic.topicId]?.completed)}
-                  className={`btn-primary text-xs px-4 py-2 flex items-center gap-2 shadow-sm ${
-                    userProgress[selectedTopic.topicId]?.completed ? 'bg-emerald-600 hover:bg-emerald-700' : ''
-                  }`}
-                >
-                  <Check className="w-4 h-4" />
-                  {userProgress[selectedTopic.topicId]?.completed ? 'Completed' : 'Mark as Completed'}
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => navigate(`/practice?topic=${encodeURIComponent(selectedTopic.title)}`)}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+                    title="Practice this DSA topic with AI-generated MCQs, coding problems & rubric evaluation"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    AI Practice
+                  </button>
+                  <button
+                    onClick={() => toggleCompleted(selectedTopic.topicId, userProgress[selectedTopic.topicId]?.completed)}
+                    className={`btn-primary text-xs px-4 py-2 flex items-center gap-2 shadow-sm ${
+                      userProgress[selectedTopic.topicId]?.completed ? 'bg-emerald-600 hover:bg-emerald-700' : ''
+                    }`}
+                  >
+                    <Check className="w-4 h-4" />
+                    {userProgress[selectedTopic.topicId]?.completed ? 'Completed' : 'Mark as Completed'}
+                  </button>
+                </div>
               </div>
 
               {/* 1. Overview & Why It Matters */}
@@ -410,3 +430,4 @@ export default function DsaLearning() {
     </div>
   );
 }
+

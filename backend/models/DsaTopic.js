@@ -84,3 +84,4 @@ dsaTopicSchema.index({ moduleId: 1, order: 1 });
 dsaTopicSchema.index({ title: 'text', overview: 'text' });
 
 module.exports = mongoose.model('DsaTopic', dsaTopicSchema);
+

@@ -88,3 +88,4 @@ subjectNoteSchema.index({ subject: 1, unit: 1, order: 1 });
 subjectNoteSchema.index({ topic: 'text', introduction: 'text', keyConcepts: 'text' });
 
 module.exports = mongoose.model('SubjectNote', subjectNoteSchema);
+
