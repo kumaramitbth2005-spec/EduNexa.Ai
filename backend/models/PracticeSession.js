@@ -89,7 +89,7 @@ const practiceSessionSchema = new mongoose.Schema(
     },
     mode: {
       type: String,
-      enum: ['practice', 'assessment'],
+      enum: ['practice', 'learning', 'assessment'],
       default: 'practice',
     },
     status: {

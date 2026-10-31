@@ -163,6 +163,7 @@ const generateFallbackQuestions = (topic, category, difficulty) => {
 exports.generatePractice = async (req, res, next) => {
   try {
     const { topic, subject = 'Computer Science', category = 'all', difficulty = 'medium', mode = 'practice', count = 5 } = req.body;
+    const sessionMode = (mode === 'learning' || mode === 'practice') ? 'practice' : mode;
 
     if (!topic || !topic.trim()) {
       return res.status(400).json({ success: false, message: 'Topic is required to generate practice.' });
@@ -203,71 +204,49 @@ exports.generatePractice = async (req, res, next) => {
     if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
       try {
         const ai = getGenAI();
-        const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
+        const model = ai.getGenerativeModel({
+          model: 'gemini-3.5-flash',
+          generationConfig: { maxOutputTokens: 2500, temperature: 0.7 }
+        });
 
         const prompt = `You are an elite Computer Science Professor and Technical Interview Evaluator.
-Generate a high-yield, personalized practice session for the topic: "${trimmedTopic}".
-Subject/Context: "${subject}". ${contextualNote ? `Additional Notes: "${contextualNote}".` : ''}
-Difficulty Level: "${difficulty}" (easy, medium, or hard).
-Category Focus: "${category}" (can be 'all', 'mcq', 'conceptual', 'written', 'coding', 'scenario').
-Total questions requested: ${Math.min(Math.max(count, 3), 10)}.
+Generate a high-yield practice session for the topic: "${trimmedTopic}".
+Subject/Context: "${subject}". ${contextualNote ? `Notes: "${contextualNote}".` : ''}
+Difficulty Level: "${difficulty}". Category: "${category}". Questions: ${Math.min(Math.max(count, 3), 5)}.
 
-Rules:
-1. Every question MUST be directly relevant to "${trimmedTopic}".
-2. Include a balanced mix according to Category:
-   - 'all': 2 MCQs (1 single-choice, 1 multi-choice), 1 conceptual question, 1 coding problem with starter code & test cases, 1 scenario-based problem solving question.
-   - 'mcq': Multiple-choice questions with 4 options each, detailed explanations, and distractor rationale.
-   - 'conceptual': In-depth questions asking "Why", "How", architecture, internal mechanisms, and contrast.
-   - 'written': Short & descriptive questions with structured rubric criteria.
-   - 'coding': Real programming problems with problem statement, constraints, I/O formats, starter code in Python, Java, JS, C++, and at least 3 test cases (including hidden).
-   - 'scenario': Real-world architectural or debugging scenario.
-3. For every question, provide clear 'hints', 'explanation', and 'modelAnswer'.
-4. For written and conceptual questions, include a 3-part 'rubric' with criteria and marks.
-
-Return ONLY a valid JSON array of objects. Do NOT include markdown code fences, headers, or conversational text.
-JSON Structure:
+Return ONLY a valid JSON array of objects without markdown formatting:
 [
   {
     "questionId": "q_1",
-    "type": "mcq_single" | "mcq_multi" | "conceptual" | "short_answer" | "long_answer" | "coding" | "scenario",
-    "question": "Question text here",
-    "context": "Brief context or code snippet if needed",
+    "type": "mcq_single" | "conceptual" | "short_answer" | "coding",
+    "question": "Clear question text",
     "options": [
-      { "id": "opt_a", "text": "Option A text", "isCorrect": true },
-      { "id": "opt_b", "text": "Option B text", "isCorrect": false },
-      { "id": "opt_c", "text": "Option C text", "isCorrect": false },
-      { "id": "opt_d", "text": "Option D text", "isCorrect": false }
+      { "id": "opt_a", "text": "Option A", "isCorrect": true },
+      { "id": "opt_b", "text": "Option B", "isCorrect": false },
+      { "id": "opt_c", "text": "Option C", "isCorrect": false },
+      { "id": "opt_d", "text": "Option D", "isCorrect": false }
     ],
-    "correctAnswer": "opt_a" (or array ["opt_a", "opt_b"] for multi-choice),
-    "modelAnswer": "Model solution/reference answer",
-    "rubric": [
-      { "criterion": "Concept Understanding", "marks": 2, "description": "Accurate definition and mechanisms" },
-      { "criterion": "Completeness", "marks": 2, "description": "Addresses all sub-questions" },
-      { "criterion": "Clarity & Structure", "marks": 1, "description": "Precise technical vocabulary" }
-    ],
-    "codingDetails": {
-      "starterCode": {
-        "python": "def solution(...):\\n    pass",
-        "java": "class Solution {\\n    public int solution(...) {\\n        return 0;\\n    }\\n}",
-        "javascript": "function solution(...) {\\n}",
-        "cpp": "int solution(...) {\\n    return 0;\\n}"
-      },
-      "problemStatement": "Detailed problem description",
-      "inputFormat": "Input specifications",
-      "outputFormat": "Output specifications",
-      "constraints": "1 <= N <= 10^5",
-      "testCases": [
-        { "input": "...", "expectedOutput": "...", "isHidden": false },
-        { "input": "...", "expectedOutput": "...", "isHidden": true }
-      ]
-    },
-    "hints": ["Hint 1", "Hint 2"],
-    "explanation": "Deep conceptual breakdown of why the answer is correct",
-    "marks": 5
+    "correctAnswer": "opt_a",
+    "modelAnswer": "Model solution / concise answer",
+    "explanation": "Why this is correct and key conceptual insight",
+    "hints": ["Helpful clue 1"],
+    "marks": 2
   }
-]`;
+]
+For coding questions, include:
+"codingDetails": {
+  "starterCode": { "python": "def solve(): pass", "javascript": "function solve() {}" },
+  "problemStatement": "Task description",
+  "testCases": [{ "input": "sample", "expectedOutput": "result", "isHidden": false }]
+}
+For non-MCQ questions, leave options as [].`;
 
-        const result = await model.generateContent(prompt);
+        // 18-second timeout race to prevent hanging
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('AI generation timed out after 18s')), 18000)
+        );
+
+        const result = await Promise.race([model.generateContent(prompt), timeoutPromise]);
         const text = result.response.text();
         const parsed = parseAIJson(text);
 
@@ -326,7 +305,7 @@ JSON Structure:
       subject,
       category,
       difficulty,
-      mode,
+      mode: sessionMode,
       questions: generatedQuestions,
       totalMarks,
       obtainedMarks: 0,

@@ -132,8 +132,8 @@ export const dsaService = {
 };
 
 export const practiceService = {
-  generatePractice: (data) => api.post('/practice/generate', data),
-  submitPractice: (id, data) => api.post(`/practice/${id}/submit`, data),
+  generatePractice: (data) => api.post('/practice/generate', data, { timeout: 60000 }),
+  submitPractice: (id, data) => api.post(`/practice/${id}/submit`, data, { timeout: 60000 }),
   getSessions: (params) => api.get('/practice/sessions', { params }),
   getSessionDetail: (id) => api.get(`/practice/${id}`),
   getAnalytics: () => api.get('/practice/analytics'),
