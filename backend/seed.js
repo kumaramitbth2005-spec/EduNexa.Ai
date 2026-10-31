@@ -23,12 +23,12 @@ const seedDB = async () => {
     await Post.deleteMany();
 
     // 1. Create Users
-    const password = await bcrypt.hash('Password123!', 12);
+    const plainPassword = 'Password123!';
 
     const admin = await User.create({
       name: 'System Admin',
       email: 'admin@edunexa.com',
-      password,
+      password: plainPassword,
       role: 'admin',
       isEmailVerified: true,
       bio: 'EduNexa Platform Administrator',
@@ -37,7 +37,7 @@ const seedDB = async () => {
     const teacher = await User.create({
       name: 'Dr. Rajesh Sharma',
       email: 'teacher@edunexa.com',
-      password,
+      password: plainPassword,
       role: 'teacher',
       isEmailVerified: true,
       college: 'Indian Institute of Technology',
@@ -48,7 +48,7 @@ const seedDB = async () => {
     const student = await User.create({
       name: 'Aarav Patel',
       email: 'student@edunexa.com',
-      password,
+      password: plainPassword,
       role: 'student',
       isEmailVerified: true,
       college: 'National Institute of Technology',
