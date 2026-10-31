@@ -49,9 +49,9 @@ export const examService = {
 
 export const aiService = {
   chat: (data) => api.post('/ai/chat', data),
-  summarize: (data) => api.post('/ai/summarize', data),
-  generateQuestions: (data) => api.post('/ai/generate-questions', data),
-  generateStudyPlan: (data) => api.post('/ai/study-plan', data),
+  summarize: (data) => api.post('/ai/summarize', data, { timeout: 60000 }),
+  generateQuestions: (data) => api.post('/ai/generate-questions', data, { timeout: 60000 }),
+  generateStudyPlan: (data) => api.post('/ai/study-plan', data, { timeout: 60000 }),
   translate: (data) => api.post('/ai/translate', data),
   getConversations: (params) => api.get('/ai/conversations', { params }),
   getConversation: (id) => api.get(`/ai/conversations/${id}`),
