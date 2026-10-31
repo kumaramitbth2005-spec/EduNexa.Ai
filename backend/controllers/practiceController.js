@@ -202,12 +202,14 @@ exports.generatePractice = async (req, res, next) => {
 
     // Attempt Gemini AI generation if key is present
     if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
-      try {
-        const ai = getGenAI();
-        const model = ai.getGenerativeModel({
-          model: 'gemini-3.5-flash',
-          generationConfig: { maxOutputTokens: 2500, temperature: 0.7 }
-        });
+      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.5-flash'];
+      for (const mName of candidateModels) {
+        try {
+          const ai = getGenAI();
+          const model = ai.getGenerativeModel({
+            model: mName,
+            generationConfig: { maxOutputTokens: 2500, temperature: 0.7 }
+          });
 
         const prompt = `You are an elite Computer Science Professor and Technical Interview Evaluator.
 Generate a high-yield practice session for the topic: "${trimmedTopic}".
@@ -284,11 +286,13 @@ For non-MCQ questions, leave options as [].`;
             hints: Array.isArray(q.hints) ? q.hints : [],
             marks: Number(q.marks) || (q.type === 'coding' ? 10 : q.type === 'conceptual' ? 5 : q.type.startsWith('mcq') ? (q.type === 'mcq_multi' ? 2 : 1) : 4),
           }));
+          break; // Exit loop on success
         }
       } catch (aiErr) {
-        console.warn('AI generation encountered error, falling back to dynamic curated questions:', aiErr.message);
+        console.warn(`[Practice] Model ${mName} encountered error: ${aiErr.message}`);
       }
     }
+  }
 
     // Fallback if AI was unavailable or parse failed
     if (!generatedQuestions || generatedQuestions.length === 0) {
@@ -385,7 +389,7 @@ exports.submitPractice = async (req, res, next) => {
     if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
       try {
         const ai = getGenAI();
-        aiModel = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
+        aiModel = ai.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
       } catch (e) {
         aiModel = null;
       }

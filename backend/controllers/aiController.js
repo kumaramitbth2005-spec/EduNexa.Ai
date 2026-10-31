@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 const AIConversation = require('../models/AIConversation');
 const User = require('../models/User');
 
@@ -12,9 +12,87 @@ const getGenAI = () => {
   return genAI;
 };
 
-// Auto-resolving active model
-const getAIModel = (ai, modelName = 'gemini-3.5-flash') => {
-  return ai.getGenerativeModel({ model: modelName });
+// Builds a pedagogy-optimized system instruction for EduNexa AI Tutor
+const buildAcademicSystemPrompt = (language = 'en') => `You are EduNexa AI Tutor — an elite university professor, distinguished engineering mentor, and patient academic coach.
+Your mission is to provide rigorous, accurate, structured, and crystal-clear explanations for students across all difficulty levels (Beginner, Intermediate, and Advanced).
+
+CRITICAL PEDAGOGICAL & ARCHITECTURAL GUIDELINES:
+1. MULTI-PART & MULTI-STEP QUESTIONS:
+   - If a student asks a multi-part question, address EVERY single component in full depth without truncating or skipping sub-questions.
+2. DIFFICULTY-ADAPTIVE EXPLANATIONS:
+   - Beginner Level: Deliver clear, intuitive analogies, straightforward definitions, and zero unnecessary jargon.
+   - Intermediate Level: Explain architectural working principles, comparison trade-offs, and structured code examples.
+   - Advanced Level: Provide formal mathematical derivations, low-level mechanics, concrete state matrices, invariant proofs, and real-world system design implications.
+3. ALGORITHMS & DATA STRUCTURES:
+   - Always provide complete, runnable code with line-by-line annotations.
+   - Include step-by-step dry runs with concrete sample inputs, trace tables, or pointer states.
+   - Explicitly detail best-case, average-case, and worst-case Time Complexity and Space Complexity with Big-O justifications.
+4. SYSTEM & NUMERICAL PROBLEMS (e.g. Banker's Algorithm, Page Replacement, CPU Scheduling):
+   - Output full matrices and tables (Allocation, Max, Available, Need).
+   - Show step-by-step mathematical verification (e.g., verifying if Need_i <= Work and recalculating Work = Work + Allocation_i).
+   - Clearly highlight the final safe sequence, conclusion, or deadlock status.
+5. DATABASE & NETWORKING DOMAINS:
+   - Provide standard SQL queries, transaction schedule tables, precedence/conflict graphs, protocol state machines, and sequence flow breakdowns.
+6. CONVERSATION CONTEXT & FOLLOW-UPS:
+   - Retain full awareness of previous conversation history. If a student says "give me an example", "explain the 2nd step in detail", or "show line 5 in C++", seamlessly reference and continue the previous context without asking what they mean.
+7. STRUCTURED RESPONSE FORMATTING:
+   - Format with clean GitHub Flavored Markdown (bold headers, callouts, tables, bullet points, and code blocks with language identifiers).
+   - Use standard LaTeX math notation for formulas where appropriate.
+   - Provide a concise "Key Takeaways / Exam Tips" summary at the end.
+   - Respond in ${language === 'hi' ? 'Hindi (clean, natural Devanagari script)' : 'English'} unless the student switches languages.`;
+
+// Sanitizes and validates multi-turn conversation history for strict Gemini API compliance
+const sanitizeChatHistory = (messages = []) => {
+  const history = [];
+  let lastRole = null;
+
+  for (const m of messages) {
+    const rawRole = (m.role || '').toLowerCase();
+    const role = rawRole === 'assistant' || rawRole === 'model' ? 'model' : 'user';
+    const text = (m.content || '').trim();
+    if (!text) continue;
+
+    if (role === lastRole && history.length > 0) {
+      // Merge consecutive identical roles to prevent Gemini 400 alternating role error
+      history[history.length - 1].parts[0].text += `\n\n${text}`;
+    } else {
+      history.push({
+        role,
+        parts: [{ text }],
+      });
+      lastRole = role;
+    }
+  }
+
+  // Gemini startChat history must end with a 'model' turn so that the incoming message is a 'user' turn
+  while (history.length > 0 && history[history.length - 1].role === 'user') {
+    history.pop();
+  }
+
+  // Keep last 16 turns to maintain deep conversational context without exceeding context budget
+  return history.slice(-16);
+};
+
+const CANDIDATE_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
+  'gemini-3.5-flash',
+];
+
+// Auto-resolving active model with fallback
+const getAIModel = (ai, modelName = 'gemini-3.5-flash-lite', customConfig = {}) => {
+  return ai.getGenerativeModel({
+    model: modelName,
+    safetySettings: [
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    ],
+    ...customConfig,
+  });
 };
 
 const generateFallbackQuestions = (topic, type = 'mcq', count = 5, difficulty = 'medium') => {
@@ -79,8 +157,10 @@ const checkDailyLimit = async (userId) => {
 // @POST /api/ai/chat
 exports.chat = async (req, res, next) => {
   try {
-    const { message, conversationId, language = 'en' } = req.body;
-    if (!message?.trim()) return res.status(400).json({ success: false, message: 'Message is required.' });
+    const { message, conversationId, language = 'en', continuePrevious = false } = req.body;
+    if (!message?.trim() && !continuePrevious) {
+      return res.status(400).json({ success: false, message: 'Message is required.' });
+    }
 
     // Check AI availability
     if (!process.env.GEMINI_API_KEY) {
@@ -94,10 +174,14 @@ exports.chat = async (req, res, next) => {
     // Check daily limit
     const withinLimit = await checkDailyLimit(req.user.id);
     if (!withinLimit) {
-      return res.status(429).json({ success: false, message: 'Daily AI limit reached. Try again tomorrow.' });
+      return res.status(429).json({
+        success: false,
+        message: 'Daily AI question quota reached. Please try again tomorrow.',
+        code: 'AI_LIMIT_REACHED',
+      });
     }
 
-    // Get or create conversation
+    // Get or create conversation (strictly scoped to authenticated user)
     let conversation;
     if (conversationId) {
       conversation = await AIConversation.findOne({ _id: conversationId, user: req.user.id });
@@ -106,56 +190,142 @@ exports.chat = async (req, res, next) => {
       conversation = await AIConversation.create({
         user: req.user.id,
         type: 'tutor',
-        title: message.slice(0, 50),
+        title: (message || 'New Study Session').slice(0, 50),
         language,
         messages: [],
       });
     }
 
-    // Build chat history for Gemini
     const ai = getGenAI();
-    const model = getAIModel(ai);
+    const systemPrompt = buildAcademicSystemPrompt(language);
 
-    const systemPrompt = `You are EduNexa AI Tutor — an intelligent, friendly and helpful educational assistant.
-Your role is to help students understand difficult concepts clearly and accurately.
-Respond in ${language === 'hi' ? 'Hindi (Devanagari script)' : 'English'} unless the user switches languages.
-Always explain with examples. For code, use proper markdown code blocks.
-Be encouraging and patient. If you don't know something, say so honestly.
-Never make up facts.`;
+    // Sanitize and structure historical turns
+    const history = sanitizeChatHistory(conversation.messages);
 
-    const history = conversation.messages.slice(-20).map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
+    // Formulate dispatch message (handling continuation if requested)
+    const effectiveMessage = continuePrevious
+      ? 'Please continue your explanation seamlessly from where you stopped. Do not repeat the previous text.'
+      : message.trim();
 
-    const chat = model.startChat({
-      history: [{ role: 'user', parts: [{ text: systemPrompt }] }, { role: 'model', parts: [{ text: 'Understood! I am EduNexa AI Tutor, ready to help you learn.' }] }, ...history],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-    });
+    let result = null;
+    let lastError = null;
+    let successfulModel = null;
 
-    const result = await chat.sendMessage(message);
-    const aiResponse = result.response.text();
+    // Multi-model resilient fallback loop
+    for (const modelCandidate of CANDIDATE_MODELS) {
+      try {
+        const model = getAIModel(ai, modelCandidate, {
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 0.6,
+            topP: 0.95,
+          },
+        });
 
-    // Save messages
-    conversation.messages.push({ role: 'user', content: message });
-    conversation.messages.push({ role: 'assistant', content: aiResponse });
+        const chat = model.startChat({ history });
+
+        // 75-second timeout race on the backend
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('AI generation timed out on complex query after 75s')), 75000)
+        );
+
+        result = await Promise.race([chat.sendMessage(effectiveMessage), timeoutPromise]);
+        successfulModel = modelCandidate;
+        break; // Successfully generated!
+      } catch (err) {
+        lastError = err;
+        console.warn(`[AI Tutor] Candidate model ${modelCandidate} failed: ${err.message}. Trying next candidate...`);
+        if (err.message?.includes('timed out')) {
+          break; // Don't cycle if it truly timed out after 75s
+        }
+      }
+    }
+
+    if (!result) {
+      throw lastError || new Error('All AI models failed to generate response.');
+    }
+
+    const responseObj = result.response;
+    let aiResponse = '';
+
+    try {
+      aiResponse = responseObj.text() || '';
+    } catch (textErr) {
+      // In case candidate was truncated or blocked
+      const candidate = responseObj.candidates?.[0];
+      if (candidate?.content?.parts?.[0]?.text) {
+        aiResponse = candidate.content.parts[0].text;
+      } else {
+        throw textErr;
+      }
+    }
+
+    const firstCandidate = responseObj.candidates?.[0];
+    const isTruncated = firstCandidate?.finishReason === 'MAX_TOKENS';
+
+    // Save turn to MongoDB conversation
+    if (continuePrevious && conversation.messages.length > 0 && conversation.messages[conversation.messages.length - 1].role === 'assistant') {
+      // Append to the last assistant response
+      conversation.messages[conversation.messages.length - 1].content += `\n\n${aiResponse}`;
+    } else {
+      conversation.messages.push({ role: 'user', content: effectiveMessage });
+      conversation.messages.push({ role: 'assistant', content: aiResponse });
+    }
+
     conversation.language = language;
-    if (conversation.messages.length === 2) conversation.title = message.slice(0, 60);
+    if (conversation.messages.length <= 4 && !continuePrevious) {
+      conversation.title = effectiveMessage.slice(0, 60);
+    }
     await conversation.save();
 
     res.status(200).json({
       success: true,
       response: aiResponse,
       conversationId: conversation._id,
+      isIncomplete: isTruncated,
+      finishReason: firstCandidate?.finishReason || 'STOP',
     });
   } catch (error) {
+    console.error('AI Tutor Chat Error:', error.message);
+
     if (error.message?.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ success: false, message: 'AI service not configured.', code: 'AI_NOT_CONFIGURED' });
+      return res.status(503).json({
+        success: false,
+        message: 'AI service not configured. Please verify your GEMINI_API_KEY.',
+        code: 'AI_NOT_CONFIGURED',
+      });
     }
-    if (error.status === 429) {
-      return res.status(429).json({ success: false, message: 'AI rate limit exceeded. Please try again in a minute.' });
+
+    if (error.status === 429 || error.message?.includes('429') || error.message?.includes('quota')) {
+      return res.status(429).json({
+        success: false,
+        message: 'Google Gemini API quota is temporarily exhausted or experiencing heavy traffic. Please wait 30 seconds and try again.',
+        code: 'AI_RATE_LIMITED',
+      });
     }
-    next(error);
+
+    if (error.message?.includes('timed out')) {
+      return res.status(504).json({
+        success: false,
+        message: 'This advanced academic question took longer than 75 seconds to process. Please ask to break it down or retry.',
+        code: 'AI_TIMEOUT',
+      });
+    }
+
+    if (error.message?.includes('SAFETY')) {
+      return res.status(400).json({
+        success: false,
+        message: 'The question was flagged by safety filters. Please rephrase the academic concept slightly.',
+        code: 'AI_SAFETY_FLAG',
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'The AI Tutor encountered a problem generating this response. Please try again.',
+      code: 'AI_GENERATION_FAILED',
+    });
   }
 };
 

@@ -25,7 +25,7 @@ const getGenAI = () => {
  */
 const ocrImage = async (fileBuffer, mimeType) => {
   const ai = getGenAI();
-  const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
+  const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
 
   const imagePart = {
     inlineData: {
@@ -187,7 +187,7 @@ exports.uploadDocument = async (req, res, next) => {
     if (ocrResult.text && ocrResult.confidence !== 'failed') {
       try {
         const ai = getGenAI();
-        const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
         const detectPrompt = `Based on the following extracted text from student notes, identify:
 1. The most likely academic subject (e.g., "Data Structures", "Physics", "Mathematics")
 2. Up to 8 specific topics covered
@@ -345,7 +345,7 @@ exports.analyzeDocument = async (req, res, next) => {
 
     // Build analysis prompt
     const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
+    const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
 
     let syllabusContext = '';
     if (syllabus && syllabus.topics?.length > 0) {
