@@ -4,19 +4,20 @@ import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, BookOpen, FileText, Brain, PenSquare, Users, Briefcase,
   GraduationCap, Settings, LogOut, X, ChevronRight, Zap, Star, Trophy,
-  MessageSquare, BarChart3, UserCheck, Shield
+  MessageSquare, BarChart3, UserCheck, Shield, Terminal, Layers
 } from 'lucide-react';
 
 const studentNav = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/courses', icon: BookOpen, label: 'Courses' },
-  { to: '/materials', icon: FileText, label: 'Study Materials' },
+  { to: '/subject-notes', icon: FileText, label: 'Subject Notes' },
+  { to: '/dsa', icon: Terminal, label: 'DSA Studio' },
+  { to: '/materials', icon: Layers, label: 'Study Materials' },
   { to: '/exams', icon: PenSquare, label: 'Examinations' },
   { to: '/ai/tutor', icon: Brain, label: 'AI Tutor' },
   { to: '/ai/documents', icon: FileText, label: 'Handwritten Notes' },
   { to: '/ai/notes', icon: Star, label: 'Saved Notes' },
   { to: '/ai/planner-db', icon: BarChart3, label: 'Study Planner' },
-  { to: '/ai/summarizer', icon: Zap, label: 'PDF Summarizer' },
   { to: '/ai/questions', icon: Trophy, label: 'Question Gen' },
   { to: '/community', icon: MessageSquare, label: 'Community' },
   { to: '/career', icon: Briefcase, label: 'Career Prep' },

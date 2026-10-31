@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { aiService } from '../../services';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { aiService, notesService } from '../../services';
 import {
   HelpCircle, Sparkles, CheckCircle2, XCircle, Download,
-  RefreshCw, Check, ArrowRight
+  RefreshCw, Check, ArrowRight, AlertCircle, Bookmark, Award
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function QuestionGenerator() {
+  const [searchParams] = useSearchParams();
   const [topic, setTopic] = useState('');
   const [type, setType] = useState('mcq');
   const [difficulty, setDifficulty] = useState('medium');
@@ -16,6 +18,14 @@ export default function QuestionGenerator() {
   const [questions, setQuestions] = useState([]);
   const [userAnswers, setUserAnswers] = useState({});
   const [showAnswers, setShowAnswers] = useState(false);
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
+  const [aiConfigError, setAiConfigError] = useState(null);
+
+  useEffect(() => {
+    const urlTopic = searchParams.get('topic');
+    if (urlTopic) setTopic(urlTopic);
+  }, [searchParams]);
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -26,7 +36,9 @@ export default function QuestionGenerator() {
 
     try {
       setLoading(true);
+      setAiConfigError(null);
       setShowAnswers(false);
+      setQuizSubmitted(false);
       setUserAnswers({});
 
       const res = await aiService.generateQuestions({
@@ -40,17 +52,56 @@ export default function QuestionGenerator() {
       setQuestions(res.data.questions || []);
       toast.success(`Generated ${res.data.questions?.length || 0} practice questions!`);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to generate questions');
+      const errMsg = err.response?.data?.message || 'Failed to generate questions';
+      if (err.response?.status === 503 || err.response?.data?.code === 'AI_NOT_CONFIGURED') {
+        setAiConfigError('Google Gemini AI is not configured in backend/.env. Please configure GEMINI_API_KEY.');
+      }
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSelectOption = (qIdx, optIdx) => {
+    if (quizSubmitted) return;
     setUserAnswers((prev) => ({
       ...prev,
       [qIdx]: optIdx,
     }));
+  };
+
+  const handleSubmitQuiz = () => {
+    let correctCount = 0;
+    questions.forEach((q, qIdx) => {
+      const selectedOptIdx = userAnswers[qIdx];
+      if (selectedOptIdx !== undefined && q.options && q.options[selectedOptIdx]?.isCorrect) {
+        correctCount += 1;
+      }
+    });
+    setScore(correctCount);
+    setQuizSubmitted(true);
+    setShowAnswers(true);
+    toast.success(`Quiz completed! You scored ${correctCount}/${questions.length}`);
+  };
+
+  const handleSaveToNotes = async () => {
+    try {
+      const content = questions.map((q, i) => {
+        const opts = (q.options || []).map((o, oi) => `  ${String.fromCharCode(65 + oi)}. ${o.text}${o.isCorrect ? ' (✓ Correct)' : ''}`).join('\n');
+        return `### Q${i + 1}: ${q.text}\n${opts}\n\n**Answer:** ${q.correctAnswer || ''}\n**Explanation:** ${q.explanation || ''}\n`;
+      }).join('\n---\n\n');
+
+      await notesService.createNote({
+        title: `Quiz: ${topic} (${difficulty})`,
+        content,
+        subject: topic,
+        tags: ['Practice Quiz', difficulty, type],
+        source: 'manual',
+      });
+      toast.success('Question set saved to Saved Notes!');
+    } catch {
+      toast.error('Failed to save to Notes');
+    }
   };
 
   const downloadJSON = () => {
@@ -72,6 +123,22 @@ export default function QuestionGenerator() {
           Generate realistic multiple-choice questions, descriptive prompts, and concept checks for any topic
         </p>
       </div>
+
+      {/* AI Config Banner if missing */}
+      {aiConfigError && (
+        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 flex items-start gap-3 text-xs text-amber-800 dark:text-amber-200">
+          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="space-y-1">
+            <p className="font-bold text-sm">AI Service Configuration Required</p>
+            <p className="text-gray-600 dark:text-gray-400">
+              {aiConfigError}
+            </p>
+            <p className="text-[11px] text-gray-500 pt-1">
+              You can obtain a 100% free Gemini API Key from <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="underline font-bold text-primary-600 dark:text-primary-400">Google AI Studio</a> and paste it into <code className="bg-amber-100 dark:bg-amber-900 px-1 py-0.5 rounded">backend/.env</code> as <code className="bg-amber-100 dark:bg-amber-900 px-1 py-0.5 rounded">GEMINI_API_KEY=your_key</code>.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Generator Form */}
       <form onSubmit={handleGenerate} className="card p-6 space-y-4">
@@ -162,11 +229,53 @@ export default function QuestionGenerator() {
       {/* Generated Questions View */}
       {questions.length > 0 && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          {/* Score Card if Quiz Submitted */}
+          {quizSubmitted && (
+            <div className="card p-6 bg-gradient-to-r from-primary-50 to-indigo-50 dark:from-primary-950/40 dark:to-indigo-950/40 border border-primary-200 dark:border-primary-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-primary-600 text-white flex items-center justify-center font-bold text-xl shadow-md">
+                  <Award className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900 dark:text-white">
+                    Quiz Performance: {score} / {questions.length} ({Math.round((score / questions.length) * 100)}%)
+                  </h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    {score / questions.length >= 0.8
+                      ? '🎉 Outstanding! Strong concept mastery.'
+                      : score / questions.length >= 0.5
+                      ? '👍 Good job! Review the explanations below to strengthen weak points.'
+                      : '📖 Recommended: Review this topic in Subject Notes and re-attempt.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setQuizSubmitted(false);
+                  setUserAnswers({});
+                  setShowAnswers(false);
+                }}
+                className="btn-secondary text-xs px-4 py-2"
+              >
+                Re-take Quiz
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="font-bold text-lg text-gray-900 dark:text-white">
               Generated Questions ({questions.length})
             </h3>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              {type === 'mcq' && !quizSubmitted && (
+                <button
+                  onClick={handleSubmitQuiz}
+                  className="btn-primary text-xs px-3.5 py-1.5 flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Grade & Submit Quiz
+                </button>
+              )}
               <button
                 onClick={() => setShowAnswers(!showAnswers)}
                 className="btn-secondary text-xs px-3 py-1.5"
@@ -174,11 +283,19 @@ export default function QuestionGenerator() {
                 {showAnswers ? 'Hide Answers' : 'Reveal All Answers'}
               </button>
               <button
+                onClick={handleSaveToNotes}
+                className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 text-primary-600 dark:text-primary-400"
+                title="Save into Saved Notes"
+              >
+                <Bookmark className="w-3.5 h-3.5" />
+                Save to Notes
+              </button>
+              <button
                 onClick={downloadJSON}
                 className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
               >
                 <Download className="w-3.5 h-3.5" />
-                Export JSON
+                Export
               </button>
             </div>
           </div>

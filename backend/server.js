@@ -11,6 +11,22 @@ const mongoSanitize = require('express-mongo-sanitize');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 
+// Pre-register Mongoose models to prevent MissingSchemaError
+require('./models/User');
+require('./models/Course');
+require('./models/Subject');
+require('./models/Lesson');
+require('./models/Enrollment');
+require('./models/Exam');
+require('./models/Result');
+require('./models/StudyMaterial');
+require('./models/Notification');
+require('./models/Document');
+require('./models/Syllabus');
+require('./models/AnalysisReport');
+require('./models/StudyTask');
+require('./models/SavedNote');
+
 // Route imports
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -24,6 +40,8 @@ const documentRoutes = require('./routes/documents');
 const syllabiRoutes = require('./routes/syllabi');
 const plannerRoutes = require('./routes/planner');
 const notesRoutes = require('./routes/notes');
+const subjectNotesRoutes = require('./routes/subjectNotes');
+const dsaRoutes = require('./routes/dsa');
 
 const app = express();
 const server = http.createServer(app);
@@ -120,6 +138,10 @@ app.use('/api/auth/', authLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Static file serving for local uploads fallback
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // NoSQL injection prevention
 app.use(mongoSanitize());
 
@@ -155,6 +177,8 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/syllabi', syllabiRoutes);
 app.use('/api/planner', plannerRoutes);
 app.use('/api/notes', notesRoutes);
+app.use('/api/subject-notes', subjectNotesRoutes);
+app.use('/api/dsa', dsaRoutes);
 
 // 404
 app.use((req, res) => {

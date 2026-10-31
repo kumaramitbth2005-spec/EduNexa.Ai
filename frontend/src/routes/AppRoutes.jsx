@@ -18,6 +18,8 @@ const CoursesPage = lazy(() => import('../pages/student/Courses'));
 const CourseDetail = lazy(() => import('../pages/student/CourseDetail'));
 const MaterialsPage = lazy(() => import('../pages/student/Materials'));
 const ProfilePage = lazy(() => import('../pages/student/Profile'));
+const SubjectNotes = lazy(() => import('../pages/student/SubjectNotes'));
+const DsaLearning = lazy(() => import('../pages/student/DsaLearning'));
 
 // AI
 const AITutor = lazy(() => import('../pages/ai/AITutor'));
@@ -97,6 +99,14 @@ export default function AppRoutes() {
 
         <Route path="/materials" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<MaterialsPage />} />
+        </Route>
+
+        <Route path="/subject-notes" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+          <Route index element={<SubjectNotes />} />
+        </Route>
+
+        <Route path="/dsa" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+          <Route index element={<DsaLearning />} />
         </Route>
 
         <Route path="/ai" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
 const {
-  getProfile, updateProfile, uploadAvatar, changePassword,
+  getProfile, updateProfile, uploadAvatar, deleteAvatar, changePassword,
   getDashboardStats, getAllUsers, toggleUserStatus, deleteUser, getAdminStats
 } = require('../controllers/userController');
 const { uploadProfile } = require('../config/cloudinary');
@@ -10,6 +10,7 @@ const { uploadProfile } = require('../config/cloudinary');
 router.get('/profile', protect, getProfile);
 router.put('/profile', protect, updateProfile);
 router.put('/avatar', protect, uploadProfile.single('avatar'), uploadAvatar);
+router.delete('/avatar', protect, deleteAvatar);
 router.put('/change-password', protect, changePassword);
 router.get('/dashboard-stats', protect, getDashboardStats);
 

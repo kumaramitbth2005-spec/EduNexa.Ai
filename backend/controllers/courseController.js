@@ -1,4 +1,5 @@
 const Course = require('../models/Course');
+const Subject = require('../models/Subject');
 const Enrollment = require('../models/Enrollment');
 const Lesson = require('../models/Lesson');
 const Notification = require('../models/Notification');

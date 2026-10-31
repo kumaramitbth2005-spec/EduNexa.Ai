@@ -3,7 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { userService } from '../../services';
 import {
   User, Mail, Building, BookOpen, Layers, Lock,
-  Camera, Save, Shield, Globe, Moon, Sun, Check
+  Camera, Save, Shield, Globe, Moon, Sun, Check,
+  Trash2, X, UploadCloud, AlertCircle, Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -35,6 +36,9 @@ export default function Profile() {
 
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [avatarError, setAvatarError] = useState('');
 
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
@@ -82,20 +86,83 @@ export default function Profile() {
     }
   };
 
-  const handleAvatarChange = async (e) => {
+  const handleAvatarFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    setAvatarError('');
+
+    // 1. File Type Validation
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type.toLowerCase())) {
+      const msg = 'Invalid file format. Please choose a JPG, PNG, or WebP image.';
+      setAvatarError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    // 2. File Size Validation (5 MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      const msg = 'File exceeds 5MB limit. Please upload an image smaller than 5MB.';
+      setAvatarError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    // 3. Set preview
+    setSelectedAvatarFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const cancelAvatarPreview = () => {
+    setSelectedAvatarFile(null);
+    setAvatarPreview(null);
+    setAvatarError('');
+  };
+
+  const handleSaveAvatar = async () => {
+    if (!selectedAvatarFile) return;
+
     const formData = new FormData();
-    formData.append('avatar', file);
+    formData.append('avatar', selectedAvatarFile);
 
     try {
       setAvatarUploading(true);
+      setAvatarError('');
       const res = await userService.uploadAvatar(formData);
       updateUser(res.data.user);
-      toast.success('Avatar updated!');
+      setSelectedAvatarFile(null);
+      setAvatarPreview(null);
+      toast.success('Profile picture updated successfully!');
     } catch (err) {
-      toast.error('Failed to upload avatar image');
+      const errMsg = err.response?.data?.message || 'Failed to upload profile picture.';
+      setAvatarError(errMsg);
+      toast.error(errMsg);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user?.avatar) return;
+    if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
+
+    try {
+      setAvatarUploading(true);
+      setAvatarError('');
+      const res = await userService.deleteAvatar();
+      updateUser(res.data.user);
+      setSelectedAvatarFile(null);
+      setAvatarPreview(null);
+      toast.success('Profile picture removed.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to remove avatar.');
     } finally {
       setAvatarUploading(false);
     }
@@ -150,36 +217,116 @@ export default function Profile() {
       {/* Tab 1: Profile */}
       {activeTab === 'profile' && (
         <div className="card p-6 space-y-6">
-          {/* Avatar Header */}
-          <div className="flex items-center gap-5 pb-6 border-b border-gray-100 dark:border-gray-800">
-            <div className="relative">
-              {user?.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={user.name}
-                  className="w-20 h-20 rounded-full object-cover border-2 border-primary-500 shadow-md"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary-400 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-md">
-                  {user?.name?.charAt(0)}
+          {/* Avatar Header & Management */}
+          <div className="pb-6 border-b border-gray-100 dark:border-gray-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-5">
+                <div className="relative">
+                  {/* Display preview if selecting, otherwise user.avatar, otherwise initials */}
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Preview"
+                      className="w-20 h-20 rounded-full object-cover border-2 border-amber-500 shadow-md ring-4 ring-amber-100 dark:ring-amber-950"
+                    />
+                  ) : user?.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-20 h-20 rounded-full object-cover border-2 border-primary-500 shadow-md"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary-400 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-md">
+                      {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                  )}
+                  <label
+                    title="Change profile picture"
+                    className="absolute bottom-0 right-0 p-1.5 rounded-full bg-primary-600 text-white cursor-pointer hover:bg-primary-700 shadow-md transition-transform hover:scale-110"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp"
+                      onChange={handleAvatarFileSelect}
+                      className="hidden"
+                      disabled={avatarUploading}
+                    />
+                  </label>
                 </div>
-              )}
-              <label className="absolute bottom-0 right-0 p-1.5 rounded-full bg-primary-600 text-white cursor-pointer hover:bg-primary-700 shadow-md">
-                <Camera className="w-4 h-4" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarChange}
-                  className="hidden"
-                  disabled={avatarUploading}
-                />
-              </label>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    {user?.name}
+                    {avatarPreview && (
+                      <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 rounded-full font-medium">
+                        Preview Mode
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{user?.role} Account • {user?.email}</p>
+                  <p className="text-[11px] text-gray-400 mt-1">Supports JPG, PNG, WebP (Max 5MB)</p>
+                </div>
+              </div>
+
+              {/* Action Buttons for Avatar */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {avatarPreview ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={cancelAvatarPreview}
+                      disabled={avatarUploading}
+                      className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 text-gray-600 dark:text-gray-300"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveAvatar}
+                      disabled={avatarUploading}
+                      className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                    >
+                      {avatarUploading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          Save Picture
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : user?.avatar ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    disabled={avatarUploading}
+                    className="text-xs py-1.5 px-3 rounded-lg border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-1.5 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Remove Picture
+                  </button>
+                ) : null}
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{user?.name}</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{user?.role} Account • {user?.email}</p>
-              {avatarUploading && <p className="text-xs text-primary-500 mt-1 font-medium">Uploading image...</p>}
-            </div>
+
+            {/* Error or Uploading Message */}
+            {avatarError && (
+              <div className="p-2.5 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 flex items-center gap-2 text-xs text-red-600 dark:text-red-300">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{avatarError}</span>
+              </div>
+            )}
+            {avatarUploading && (
+              <div className="p-2.5 rounded-lg bg-primary-50 dark:bg-primary-950/40 border border-primary-200 dark:border-primary-900/50 flex items-center gap-2 text-xs text-primary-600 dark:text-primary-300">
+                <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+                <span>Processing & securely saving profile picture...</span>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleProfileSubmit} className="space-y-4">

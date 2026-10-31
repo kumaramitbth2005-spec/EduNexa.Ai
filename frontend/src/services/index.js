@@ -14,6 +14,7 @@ export const userService = {
   getProfile: () => api.get('/users/profile'),
   updateProfile: (data) => api.put('/users/profile', data),
   uploadAvatar: (formData) => api.put('/users/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteAvatar: () => api.delete('/users/avatar'),
   changePassword: (data) => api.put('/users/change-password', data),
   getDashboardStats: () => api.get('/users/dashboard-stats'),
   getAllUsers: (params) => api.get('/users', { params }),
@@ -114,5 +115,19 @@ export const notesService = {
   createNote: (data) => api.post('/notes', data),
   updateNote: (id, data) => api.put(`/notes/${id}`, data),
   deleteNote: (id) => api.delete(`/notes/${id}`),
+};
+
+export const subjectNotesService = {
+  getNotes: (params) => api.get('/subject-notes', { params }),
+  getHierarchy: () => api.get('/subject-notes/hierarchy'),
+  getNoteById: (id) => api.get(`/subject-notes/${id}`),
+  updateProgress: (id, data) => api.post(`/subject-notes/${id}/progress`, data),
+};
+
+export const dsaService = {
+  getModules: () => api.get('/dsa/modules'),
+  getTopics: (params) => api.get('/dsa/topics', { params }),
+  getTopicDetail: (topicId) => api.get(`/dsa/topics/${topicId}`),
+  updateProgress: (topicId, data) => api.post(`/dsa/topics/${topicId}/progress`, data),
 };
 

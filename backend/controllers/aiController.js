@@ -203,6 +203,9 @@ For non-MCQ types, set options to [].`;
     const result = await model.generateContent(prompt);
     let rawText = result.response.text().trim();
 
+    // Strip markdown code fences if present
+    rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+
     // Extract JSON from response
     const jsonMatch = rawText.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error('Invalid AI response format');

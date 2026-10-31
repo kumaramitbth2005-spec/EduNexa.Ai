@@ -1,3 +1,5 @@
+const path = require('path');
+const fs = require('fs');
 const User = require('../models/User');
 const Enrollment = require('../models/Enrollment');
 const Result = require('../models/Result');
@@ -16,7 +18,11 @@ exports.getProfile = async (req, res, next) => {
 // @PUT /api/users/profile
 exports.updateProfile = async (req, res, next) => {
   try {
-    const allowedFields = ['name', 'bio', 'phone', 'college', 'branch', 'semester', 'skills', 'socialLinks', 'preferredLanguage', 'darkMode', 'notificationPrefs'];
+    const allowedFields = [
+      'name', 'bio', 'phone', 'college', 'branch', 'semester',
+      'degree', 'educationLevel', 'learningGoals', 'availableStudyHoursPerDay',
+      'skills', 'socialLinks', 'preferredLanguage', 'darkMode', 'notificationPrefs'
+    ];
     const updates = {};
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
@@ -36,20 +42,63 @@ exports.uploadAvatar = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'No file uploaded.' });
     }
 
-    // Remove old avatar from cloudinary
+    // Determine avatar URL: Cloudinary URL or local static URL
+    let avatarUrl = req.file.path;
+    if (!avatarUrl || !avatarUrl.startsWith('http')) {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      avatarUrl = `${baseUrl}/uploads/avatars/${req.file.filename}`;
+    }
+
+    // Remove old avatar if locally stored or on Cloudinary
     const user = await User.findById(req.user.id);
-    if (user.avatar && user.avatar.includes('cloudinary')) {
-      const publicId = user.avatar.split('/').slice(-2).join('/').split('.')[0];
-      await cloudinary.uploader.destroy(publicId).catch(() => {});
+    if (user.avatar) {
+      try {
+        if (user.avatar.includes('cloudinary') && cloudinary) {
+          const publicId = user.avatar.split('/').slice(-2).join('/').split('.')[0];
+          await cloudinary.uploader.destroy(publicId).catch(() => {});
+        } else if (user.avatar.includes('/uploads/avatars/')) {
+          const oldFilename = user.avatar.split('/uploads/avatars/').pop();
+          const oldPath = path.join(__dirname, '../uploads/avatars', oldFilename);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+      } catch (_) {}
     }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user.id,
-      { avatar: req.file.path },
+      { avatar: avatarUrl },
       { new: true }
     );
 
-    res.status(200).json({ success: true, user: updatedUser, avatarUrl: req.file.path });
+    res.status(200).json({ success: true, user: updatedUser, avatarUrl });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @DELETE /api/users/avatar
+exports.deleteAvatar = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    if (user.avatar) {
+      try {
+        if (user.avatar.includes('cloudinary') && cloudinary) {
+          const publicId = user.avatar.split('/').slice(-2).join('/').split('.')[0];
+          await cloudinary.uploader.destroy(publicId).catch(() => {});
+        } else if (user.avatar.includes('/uploads/avatars/')) {
+          const oldFilename = user.avatar.split('/uploads/avatars/').pop();
+          const oldPath = path.join(__dirname, '../uploads/avatars', oldFilename);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+      } catch (_) {}
+    }
+
+    user.avatar = '';
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Profile picture removed successfully.', user });
   } catch (error) {
     next(error);
   }
