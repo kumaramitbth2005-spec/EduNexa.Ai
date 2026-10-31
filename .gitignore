@@ -21,6 +21,13 @@ data/
 *.sqlite
 *.db
 
+# Uploads
+backend/uploads/avatars/
+backend/uploads/materials/
+
+
+
+
 # Python & AI Service
 __pycache__/
 *.py[cod]
