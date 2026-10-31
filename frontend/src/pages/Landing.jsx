@@ -1,12 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  GraduationCap, Sparkles, Brain, BookOpen, PenSquare, Briefcase, Users,
-  BarChart3, CheckCircle2, ArrowRight, Zap, MessageSquare, Star,
-  Code2, Target, Award, Layers, FileText, Shield, ChevronDown
+  GraduationCap, Sparkles, Brain, BookOpen, PenSquare,
+  Users, ArrowRight, Zap, Star, Code2, Target, Award,
+  FileText, CheckCircle2, Play, Pause, ChevronDown,
+  BarChart2, MessageSquare, Lightbulb, Shield
 } from 'lucide-react';
 
-/* ─── Lightweight scroll-reveal hook ─── */
+/* ─── Constants ─────────────────────────────────── */
+const TOTAL_FRAMES = 300;
+const FRAME_FOLDER = '/ezgif-1c596d5b01f79a61-jpg';
+const pad = (n) => String(n).padStart(3, '0');
+const frameUrl = (n) => `${FRAME_FOLDER}/ezgif-frame-${pad(n)}.jpg`;
+
+/* ─── Scroll-reveal hook ─────────────────────────── */
 function useScrollReveal(threshold = 0.15) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -14,7 +21,12 @@ function useScrollReveal(threshold = 0.15) {
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          obs.disconnect();
+        }
+      },
       { threshold }
     );
     obs.observe(el);
@@ -23,14 +35,16 @@ function useScrollReveal(threshold = 0.15) {
   return [ref, visible];
 }
 
-/* ─── Reusable animated wrapper ─── */
-function Reveal({ children, delay = 0, direction = 'up', className = '' }) {
-  const [ref, visible] = useScrollReveal(0.1);
+/* ─── Reveal wrapper ─────────────────────────────── */
+function Reveal({ children, delay = 0, dir = 'up', className = '' }) {
+  const [ref, visible] = useScrollReveal();
   const transforms = {
-    up: 'translateY(48px)',
-    left: 'translateX(-60px)',
-    right: 'translateX(60px)',
-    fade: 'scale(0.96)',
+    up: 'translateY(60px)',
+    down: 'translateY(-60px)',
+    left: 'translateX(-70px)',
+    right: 'translateX(70px)',
+    fade: 'scale(0.92)',
+    zoom: 'scale(0.85)',
   };
   return (
     <div
@@ -38,8 +52,9 @@ function Reveal({ children, delay = 0, direction = 'up', className = '' }) {
       className={className}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? 'none' : transforms[direction],
-        transition: `opacity 0.7s ease ${delay}ms, transform 0.7s ease ${delay}ms`,
+        transform: visible ? 'none' : transforms[dir] || transforms.up,
+        transition: `opacity 0.8s cubic-bezier(.4,0,.2,1) ${delay}ms, transform 0.8s cubic-bezier(.4,0,.2,1) ${delay}ms`,
+        willChange: 'opacity, transform',
       }}
     >
       {children}
@@ -47,523 +62,667 @@ function Reveal({ children, delay = 0, direction = 'up', className = '' }) {
   );
 }
 
-/* ─── Features data ─── */
-const features = [
-  { icon: Brain,       color: 'from-violet-500 to-purple-600',  bg: 'bg-violet-50 dark:bg-violet-950/30', title: 'Bilingual AI Tutor',          desc: 'Ask doubts in English or Hindi. Get step-by-step explanations, code walkthroughs, and real-world examples instantly.' },
-  { icon: Zap,         color: 'from-amber-400 to-orange-500',   bg: 'bg-amber-50 dark:bg-amber-950/30',  title: 'AI Practice & Evaluation',    desc: 'Topic-aware MCQs, coding problems, and rubric-scored written answers. Gemini AI evaluates your answers with detailed feedback.' },
-  { icon: FileText,    color: 'from-sky-400 to-blue-600',       bg: 'bg-sky-50 dark:bg-sky-950/30',      title: 'PDF & Note Summarizer',       desc: 'Upload textbooks, handwritten notes, or lecture slides. Get high-yield revision summaries in seconds.' },
-  { icon: PenSquare,   color: 'from-pink-500 to-rose-600',      bg: 'bg-pink-50 dark:bg-pink-950/30',    title: 'Real-Time Online Exams',      desc: 'Timed MCQ & descriptive exams with auto-grading, instant feedback, and in-depth performance analytics.' },
-  { icon: Code2,       color: 'from-emerald-400 to-teal-600',   bg: 'bg-emerald-50 dark:bg-emerald-950/30', title: 'DSA Mastery Studio',       desc: '14-module DSA roadmap with Java, C++, Python & JS implementations, step-by-step dry-run tables, and progress tracking.' },
-  { icon: Users,       color: 'from-indigo-400 to-blue-600',    bg: 'bg-indigo-50 dark:bg-indigo-950/30', title: 'Collaborative Community',   desc: 'Post doubts, upvote solutions, and connect with peers and mentors in real-time discussion threads.' },
-  { icon: Target,      color: 'from-fuchsia-500 to-purple-700', bg: 'bg-fuchsia-50 dark:bg-fuchsia-950/30', title: 'Adaptive Learning Engine', desc: 'EduNexa learns your weak areas and auto-recommends targeted practice drills to close your knowledge gaps.' },
-  { icon: Briefcase,   color: 'from-cyan-400 to-sky-600',       bg: 'bg-cyan-50 dark:bg-cyan-950/30',    title: 'Career & Placement Prep',    desc: 'Structured roadmaps, mock interviews, company-specific question banks, and placement readiness tracking.' },
-  { icon: BookOpen,    color: 'from-lime-400 to-green-600',     bg: 'bg-lime-50 dark:bg-lime-950/30',    title: 'Semester-Wise Notes',        desc: 'University curriculum notes organised by degree, branch, and semester with bilingual Hindi/English explanations.' },
-];
+/* ─── Canvas GIF Player ──────────────────────────── */
+function GifPlayer({ className = '', autoplay = true, step = 3 }) {
+  const canvasRef = useRef(null);
+  const frameRef = useRef(1);
+  const imagesRef = useRef([]);
+  const rafRef = useRef(null);
+  const lastTimeRef = useRef(0);
+  const [loaded, setLoaded] = useState(false);
+  const [playing, setPlaying] = useState(autoplay);
+  const playingRef = useRef(autoplay);
+  const FPS = 24;
+  const INTERVAL = 1000 / FPS;
 
-/* ─── Scroll sections (image + text alternating) ─── */
-const scrollSections = [
-  {
-    tag: 'AI-Powered Dashboard',
-    heading: 'Your Smart Learning Command Centre',
-    body: 'Get a personalised dashboard showing enrolled courses, practice streaks, exam results, and AI-driven next-step recommendations — all in one beautiful view.',
-    bullets: ['Personalized daily study plan', 'Live performance analytics', 'AI-suggested practice topics', 'Course progress with visual tracker'],
-    accent: 'from-primary-500 to-indigo-600',
-    imgSide: 'right',
-  },
-  {
-    tag: 'Practice & Evaluation',
-    heading: 'Gemini AI Evaluates Every Answer You Write',
-    body: 'Generate MCQs, conceptual questions, coding problems, and scenario-based challenges on any topic. EduNexa\'s backend evaluates your answers with rubric-based AI grading — never fake scores.',
-    bullets: ['Single & multi-select MCQs with explanations', 'Rubric-graded written descriptive answers', 'Coding problems with 4-language starter code', 'Topic mastery matrix updated after every session'],
-    accent: 'from-amber-500 to-orange-600',
-    imgSide: 'left',
-  },
-  {
-    tag: 'DSA Mastery Studio',
-    heading: 'Crack Placements with Structured DSA Learning',
-    body: 'Work through 14 curated DSA modules — Arrays, Trees, Graphs, Dynamic Programming and more. Each topic includes visual dry-run tables, Java/C++/Python/JS implementations, and time-complexity analysis.',
-    bullets: ['14 DSA modules covering all interview patterns', 'Code in 4 languages with syntax highlighting', 'Step-by-step dry-run & complexity analysis', 'Progress tracking with study streak rewards'],
-    accent: 'from-emerald-500 to-teal-600',
-    imgSide: 'right',
-  },
-];
+  // Load every `step`-th frame
+  useEffect(() => {
+    const indices = [];
+    for (let i = 1; i <= TOTAL_FRAMES; i += step) indices.push(i);
+    let done = 0;
+    const imgs = new Array(indices.length);
+    imagesRef.current = imgs;
 
-/* ─── Stats ─── */
-const stats = [
-  { value: '10,000+', label: 'Active Students', color: 'text-primary-600 dark:text-primary-400' },
-  { value: '500+',    label: 'Curated Courses',  color: 'text-indigo-600 dark:text-indigo-400'  },
-  { value: '98.5%',  label: 'Exam Pass Rate',   color: 'text-purple-600 dark:text-purple-400'  },
-  { value: '24/7',   label: 'AI Availability',  color: 'text-pink-600 dark:text-pink-400'      },
-];
+    indices.forEach((fn, idx) => {
+      const img = new Image();
+      img.onload = () => {
+        imgs[idx] = img;
+        done++;
+        if (done === indices.length) setLoaded(true);
+      };
+      img.onerror = () => { done++; if (done === indices.length) setLoaded(true); };
+      img.src = frameUrl(fn);
+    });
+    return () => { imagesRef.current = []; };
+  }, [step]);
 
-/* ─── Testimonials ─── */
-const testimonials = [
-  { name: 'Priya Sharma',   role: 'B.Tech CSE, 3rd Year', text: 'EduNexa\'s AI Practice system helped me crack my university sem exams. The rubric feedback on written answers is like having a personal professor!', rating: 5 },
-  { name: 'Arjun Mehta',    role: 'Software Engineer, Wipro', text: 'The DSA Studio and mock interviews gave me the confidence to crack my placement at Wipro. Best platform for placements prep.', rating: 5 },
-  { name: 'Sneha Patel',    role: 'MCA Final Year', text: 'I uploaded my handwritten notes and the AI summarised them perfectly. The bilingual Hindi support is a game-changer for regional students.', rating: 5 },
-];
-
-export default function Landing() {
-  const [scrollY, setScrollY] = useState(0);
+  // Animation loop
+  const animate = useCallback((ts) => {
+    if (!playingRef.current) return;
+    if (ts - lastTimeRef.current >= INTERVAL) {
+      lastTimeRef.current = ts;
+      const imgs = imagesRef.current;
+      const total = imgs.length;
+      let fi = frameRef.current % total;
+      let img = imgs[fi];
+      let tries = 0;
+      while (!img && tries < total) { fi = (fi + 1) % total; img = imgs[fi]; tries++; }
+      if (img) {
+        const c = canvasRef.current;
+        if (c) {
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+        }
+      }
+      frameRef.current = (frameRef.current + 1) % total;
+    }
+    rafRef.current = requestAnimationFrame(animate);
+  }, [INTERVAL]);
 
   useEffect(() => {
-    const onScroll = () => setScrollY(window.scrollY);
+    if (loaded && playing) {
+      playingRef.current = true;
+      rafRef.current = requestAnimationFrame(animate);
+    } else {
+      playingRef.current = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    }
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [loaded, playing, animate]);
+
+  const toggle = () => setPlaying(p => { playingRef.current = !p; return !p; });
+
+  return (
+    <div className={`relative group ${className}`}>
+      {/* Glow border */}
+      <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-br from-purple-500 via-blue-500 to-cyan-400 opacity-70 blur-sm group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="relative rounded-2xl overflow-hidden bg-gray-950 shadow-2xl">
+        {!loaded && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-10 gap-3">
+            <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-gray-400 text-sm">Loading preview…</span>
+          </div>
+        )}
+        <canvas
+          ref={canvasRef}
+          width={800}
+          height={500}
+          className="w-full h-auto block"
+          style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.5s' }}
+        />
+        {/* Play/Pause overlay */}
+        {loaded && (
+          <button
+            onClick={toggle}
+            className="absolute bottom-3 right-3 bg-black/60 hover:bg-black/90 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-sm"
+          >
+            {playing ? <Pause size={16} /> : <Play size={16} />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Static Frame Snapshot ──────────────────────── */
+function FrameSnap({ frame, alt = 'EduNexa preview', className = '' }) {
+  return (
+    <div className={`relative group ${className}`}>
+      <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 opacity-60 blur-sm group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="relative rounded-2xl overflow-hidden shadow-2xl">
+        <img
+          src={frameUrl(frame)}
+          alt={alt}
+          className="w-full h-auto block"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Floating Badge ──────────────────────────────── */
+function Badge({ icon: Icon, label, sub, color, style }) {
+  return (
+    <div
+      style={style}
+      className={`absolute hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900/90 border border-gray-700/80 backdrop-blur-md shadow-xl text-white text-xs z-10`}
+    >
+      <span className={`p-1.5 rounded-lg ${color}`}><Icon size={14} /></span>
+      <div>
+        <div className="font-semibold leading-tight">{label}</div>
+        {sub && <div className="text-gray-400 text-[10px]">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Stat Card ───────────────────────────────────── */
+function StatCard({ value, label, icon: Icon, color, delay }) {
+  return (
+    <Reveal delay={delay} dir="up">
+      <div className="flex flex-col items-center gap-2 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors duration-300">
+        <span className={`p-3 rounded-xl ${color}`}><Icon size={22} /></span>
+        <span className="text-3xl font-extrabold text-white">{value}</span>
+        <span className="text-gray-400 text-sm text-center">{label}</span>
+      </div>
+    </Reveal>
+  );
+}
+
+/* ─── Feature Card ────────────────────────────────── */
+function FeatureCard({ icon: Icon, title, desc, color, delay }) {
+  return (
+    <Reveal delay={delay} dir="up">
+      <div className="group p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/8 hover:border-white/20 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-default">
+        <span className={`inline-flex p-3 rounded-xl mb-4 ${color}`}><Icon size={22} /></span>
+        <h3 className="text-white font-semibold text-base mb-2">{title}</h3>
+        <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>
+      </div>
+    </Reveal>
+  );
+}
+
+/* ─── Step Card ────────────────────────────────────── */
+function StepCard({ num, title, desc, delay }) {
+  return (
+    <Reveal delay={delay} dir="up">
+      <div className="relative flex flex-col items-center text-center p-7 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/8 transition-colors duration-300">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg mb-4 shadow-lg shadow-purple-500/30">
+          {num}
+        </div>
+        <h3 className="text-white font-semibold text-base mb-2">{title}</h3>
+        <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>
+      </div>
+    </Reveal>
+  );
+}
+
+/* ─── Testimonial Card ────────────────────────────── */
+function TestiCard({ name, role, text, avatar, delay }) {
+  return (
+    <Reveal delay={delay} dir="zoom">
+      <div className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300">
+        <div className="flex gap-1 mb-3">
+          {[...Array(5)].map((_, i) => <Star key={i} size={14} className="fill-yellow-400 text-yellow-400" />)}
+        </div>
+        <p className="text-gray-300 text-sm leading-relaxed mb-4">"{text}"</p>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm">
+            {avatar}
+          </div>
+          <div>
+            <div className="text-white text-sm font-semibold">{name}</div>
+            <div className="text-gray-500 text-xs">{role}</div>
+          </div>
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   MAIN LANDING PAGE
+═══════════════════════════════════════════════════ */
+export default function Landing() {
+  /* ── Navbar scroll ── */
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const features = [
+    { icon: Brain,         title: 'AI Tutor',              color: 'bg-purple-500/20 text-purple-400', desc: 'Get instant answers to any academic question, explained step by step with examples.' },
+    { icon: FileText,      title: 'PDF Summarizer',        color: 'bg-blue-500/20 text-blue-400',     desc: 'Upload any PDF textbook or notes and get a crisp AI-generated summary in seconds.' },
+    { icon: Zap,           title: 'Question Generator',    color: 'bg-cyan-500/20 text-cyan-400',     desc: 'Auto-generate MCQs, conceptual, written, and coding questions for any topic.' },
+    { icon: Code2,         title: 'DSA Learning',          color: 'bg-green-500/20 text-green-400',   desc: 'Master Data Structures & Algorithms with visual explanations and practice problems.' },
+    { icon: Target,        title: 'AI Practice System',    color: 'bg-orange-500/20 text-orange-400', desc: 'Personalized adaptive practice sessions that improve based on your performance.' },
+    { icon: BookOpen,      title: 'Subject Notes',         color: 'bg-pink-500/20 text-pink-400',     desc: 'Organized subject-wise notes with smart search and AI-powered insights.' },
+    { icon: BarChart2,     title: 'Progress Analytics',    color: 'bg-yellow-500/20 text-yellow-400', desc: 'Track your learning journey with detailed performance analytics and streaks.' },
+    { icon: MessageSquare, title: 'Smart Quizzes',         color: 'bg-red-500/20 text-red-400',       desc: 'Topic-aware quizzes with instant feedback and detailed explanations.' },
+    { icon: Lightbulb,     title: 'Study Planner',         color: 'bg-indigo-500/20 text-indigo-400', desc: 'AI-powered study schedules that adapt to your goals, pace, and exam dates.' },
+  ];
+
+  const showcaseSections = [
+    { frame: 30,  dir: 'right', textDir: 'left',  badge: 'AI Tutor', title: 'Ask Anything. Learn Instantly.', desc: 'Your personal AI tutor is available 24/7. Get clear, step-by-step explanations for any concept — from basic algebra to advanced algorithms. EduNexa understands your level and adapts accordingly.' },
+    { frame: 90,  dir: 'left',  textDir: 'right', badge: 'Practice', title: 'Personalized Practice Sessions.', desc: 'Stop studying blindly. EduNexa generates topic-specific MCQs, coding problems, and descriptive questions based on exactly what you just studied — and tracks every attempt.' },
+    { frame: 160, dir: 'right', textDir: 'left',  badge: 'Analytics', title: 'Know Where You Stand.', desc: 'Detailed progress dashboards show your strengths, weaknesses, streaks, and topic mastery — so you always know what to study next for maximum improvement.' },
+    { frame: 230, dir: 'left',  textDir: 'right', badge: 'DSA', title: 'Master DSA Like Never Before.', desc: 'Visual DSA explanations, problem walkthroughs, and AI-guided practice. From arrays to dynamic programming — EduNexa makes the hardest topics click.' },
+  ];
+
+  const stats = [
+    { value: '50K+',  label: 'Active Students',      icon: Users,       color: 'bg-purple-500/20 text-purple-400', delay: 0   },
+    { value: '200+',  label: 'Courses & Subjects',   icon: BookOpen,    color: 'bg-blue-500/20 text-blue-400',     delay: 100 },
+    { value: '1M+',   label: 'Questions Generated',  icon: Zap,         color: 'bg-cyan-500/20 text-cyan-400',     delay: 200 },
+    { value: '98%',   label: 'Student Satisfaction', icon: Star,        color: 'bg-yellow-500/20 text-yellow-400', delay: 300 },
+  ];
+
+  const steps = [
+    { num: '1', title: 'Create Your Account',     desc: 'Sign up free and set up your student profile with your subjects, syllabus, and learning goals.' },
+    { num: '2', title: 'Study With AI Support',   desc: 'Read notes, watch DSA topics, ask the AI tutor questions, and upload PDFs for instant summaries.' },
+    { num: '3', title: 'Practice & Improve',      desc: 'Take AI-generated practice sessions, review your mistakes, and watch your mastery grow every day.' },
+  ];
+
+  const testimonials = [
+    { name: 'Arjun Sharma',   role: 'B.Tech CSE, IIT Delhi',   avatar: 'A', text: 'EduNexa\'s AI tutor helped me crack my semester exams. The personalized practice questions are spot-on and the DSA section is incredibly detailed.',    delay: 0   },
+    { name: 'Priya Patel',    role: 'MCA Student, CDAC',        avatar: 'P', text: 'I love how the platform generates practice questions based on exactly what I studied. The progress analytics keep me motivated every single day.',        delay: 100 },
+    { name: 'Rahul Verma',    role: 'BCA, Amity University',    avatar: 'R', text: 'The PDF summarizer saved me hours during exam prep. I uploaded my entire textbook and got a perfect summary in under a minute!',                        delay: 200 },
+    { name: 'Sneha Gupta',    role: 'B.Sc CS, Delhi University', avatar: 'S', text: 'Finally, a study platform that actually understands Indian curriculum. The subject notes and quiz system is exactly what I needed.',                    delay: 300 },
+    { name: 'Vikram Singh',   role: 'M.Tech, NIT Trichy',       avatar: 'V', text: 'The AI practice system adapts to my weak areas and keeps pushing me. My problem-solving speed has improved dramatically in just 3 weeks.', delay: 400 },
+    { name: 'Ananya Mehta',   role: 'B.Tech IT, VIT Vellore',   avatar: 'A', text: 'EduNexa is the only platform where I feel like I have a personal mentor. The AI tutor explains things in a way my professors never could.',             delay: 500 },
+  ];
+
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 flex flex-col selection:bg-primary-500 selection:text-white overflow-x-hidden">
+    <div className="min-h-screen bg-gray-950 text-white overflow-x-hidden">
 
-      {/* ── STICKY HEADER ── */}
-      <header
-        className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
-        style={{
-          background: scrollY > 40 ? 'rgba(255,255,255,0.92)' : 'transparent',
-          backdropFilter: scrollY > 40 ? 'blur(16px)' : 'none',
-          borderBottom: scrollY > 40 ? '1px solid rgba(229,231,235,0.8)' : '1px solid transparent',
-          boxShadow: scrollY > 40 ? '0 2px 24px rgba(0,0,0,0.06)' : 'none',
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md shadow-primary-500/25">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-extrabold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent">
-              EduNexa
+      {/* ── Navbar ───────────────────────────────────── */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled ? 'bg-gray-950/90 backdrop-blur-xl border-b border-white/10 shadow-xl' : 'bg-transparent'}`}>
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2 text-xl font-bold">
+            <span className="p-1.5 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500">
+              <GraduationCap size={20} className="text-white" />
             </span>
+            <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">EduNexa</span>
           </Link>
-
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-gray-600 dark:text-gray-300">
-            <a href="#features"   className="hover:text-primary-600 transition-colors">Features</a>
-            <a href="#showcase"   className="hover:text-primary-600 transition-colors">Platform</a>
-            <a href="#ai-suite"   className="hover:text-primary-600 transition-colors">AI Suite</a>
-            <a href="#testimonials" className="hover:text-primary-600 transition-colors">Reviews</a>
-          </nav>
-
+          <div className="hidden md:flex items-center gap-8 text-sm text-gray-400">
+            <a href="#features"     className="hover:text-white transition-colors">Features</a>
+            <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
+            <a href="#showcase"     className="hover:text-white transition-colors">Showcase</a>
+            <a href="#testimonials" className="hover:text-white transition-colors">Reviews</a>
+          </div>
           <div className="flex items-center gap-3">
-            <Link to="/login"    className="hidden sm:inline-flex btn-secondary text-sm px-4 py-2">Sign In</Link>
-            <Link to="/register" className="btn-primary text-sm px-5 py-2 shadow-lg shadow-primary-500/25 rounded-xl">
-              Get Started Free
+            <Link to="/login"    className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2">Login</Link>
+            <Link to="/register" className="text-sm bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white px-5 py-2 rounded-xl font-semibold transition-all duration-300 shadow-lg shadow-purple-500/20">
+              Get Started
             </Link>
           </div>
         </div>
-      </header>
+      </nav>
 
-      {/* ── HERO ── */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center pt-16 overflow-hidden">
-        {/* Animated gradient background */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-indigo-50/50 to-purple-50/60 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/10" />
-          {/* Floating orbs */}
-          <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-primary-400/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-indigo-400/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+      {/* ═══════════════════════════════════════════════
+          HERO SECTION
+      ═══════════════════════════════════════════════ */}
+      <section className="relative min-h-screen flex items-center pt-20 pb-16 overflow-hidden">
+        {/* Background blobs */}
+        <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+          <div className="absolute top-[-10%] left-[-5%]   w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-3xl" />
+          <div className="absolute top-[20%]  right-[-10%] w-[400px] h-[400px] bg-blue-600/20   rounded-full blur-3xl" />
+          <div className="absolute bottom-0  left-[30%]   w-[350px] h-[350px] bg-cyan-600/15   rounded-full blur-3xl" />
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-[85vh]">
+        <div className="relative max-w-7xl mx-auto px-6 w-full">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
 
-            {/* LEFT — Text content */}
-            <div className="text-left space-y-7 py-16">
-              <div
-                style={{ opacity: 1, animation: 'fadeSlideUp 0.7s ease forwards' }}
-              >
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-100 dark:bg-primary-950/80 text-primary-700 dark:text-primary-300 text-xs font-semibold uppercase tracking-wider border border-primary-200 dark:border-primary-800">
-                  <Sparkles className="w-3.5 h-3.5 text-primary-500" />
-                  Next-Generation Smart Learning Platform
+            {/* Left: Text — these animate on scroll (hero is above fold so starts with slight opacity) */}
+            <div className="flex flex-col gap-6">
+              {/* Tag */}
+              <Reveal dir="up" delay={0}>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300 text-sm w-fit">
+                  <Sparkles size={14} />
+                  <span>India's #1 AI-Powered Study Platform</span>
                 </div>
-              </div>
+              </Reveal>
 
-              <div style={{ animation: 'fadeSlideUp 0.7s ease 0.1s both' }}>
-                <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white leading-[1.08]">
-                  Learn Better.{' '}
-                  <span className="bg-gradient-to-r from-primary-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    Practice Smarter.
+              {/* Heading */}
+              <Reveal dir="up" delay={100}>
+                <h1 className="text-4xl sm:text-5xl xl:text-6xl font-black leading-tight">
+                  Study Smarter with{' '}
+                  <span className="bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                    AI Intelligence
                   </span>
-                  <br />
-                  Build Your Future.
                 </h1>
-              </div>
+              </Reveal>
 
-              <div style={{ animation: 'fadeSlideUp 0.7s ease 0.2s both' }}>
-                <p className="text-lg text-gray-600 dark:text-gray-300 max-w-xl leading-relaxed">
-                  EduNexa fuses <strong className="text-gray-900 dark:text-white">Gemini AI</strong> with modern pedagogy — master programming, ace university exams, analyse handwritten notes, and launch your career with personalised roadmaps.
+              {/* Sub */}
+              <Reveal dir="up" delay={200}>
+                <p className="text-gray-400 text-lg leading-relaxed max-w-lg">
+                  EduNexa is your complete AI-powered education companion — personalized practice,
+                  instant AI tutoring, smart quizzes, DSA mastery, and deep progress analytics.
+                  All in one platform.
                 </p>
-              </div>
+              </Reveal>
 
-              <div style={{ animation: 'fadeSlideUp 0.7s ease 0.3s both' }}>
-                <div className="flex flex-wrap items-center gap-3">
-                  {['AI Tutor', 'DSA Studio', 'Smart Practice', 'PDF Summarizer', 'Career Prep'].map((tag) => (
-                    <span key={tag} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 shadow-sm">
-                      ✦ {tag}
+              {/* Pills */}
+              <Reveal dir="up" delay={280}>
+                <div className="flex flex-wrap gap-2">
+                  {['AI Tutor', 'Smart Practice', 'PDF Summarizer', 'DSA Learning', 'Progress Tracking'].map(p => (
+                    <span key={p} className="px-3 py-1 rounded-full bg-white/8 border border-white/10 text-gray-300 text-xs">
+                      {p}
                     </span>
                   ))}
                 </div>
-              </div>
+              </Reveal>
 
-              <div style={{ animation: 'fadeSlideUp 0.7s ease 0.4s both' }}>
-                <div className="flex flex-col sm:flex-row gap-4">
+              {/* CTAs */}
+              <Reveal dir="up" delay={360}>
+                <div className="flex flex-wrap gap-4">
                   <Link
                     to="/register"
-                    className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-700 hover:to-indigo-700 text-white font-bold text-base shadow-xl shadow-primary-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                    className="group flex items-center gap-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white px-8 py-3.5 rounded-xl font-semibold text-base shadow-xl shadow-purple-500/30 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/40"
                   >
                     Start Learning Free
-                    <ArrowRight className="w-5 h-5" />
+                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                   </Link>
                   <Link
                     to="/login"
-                    className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-semibold text-base hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                    className="flex items-center gap-2 border border-white/20 hover:border-white/40 text-white px-8 py-3.5 rounded-xl font-semibold text-base transition-all duration-300 hover:bg-white/5"
                   >
-                    Sign In to Dashboard
+                    Sign In
                   </Link>
                 </div>
-              </div>
+              </Reveal>
 
-              {/* Mini stat row */}
-              <div style={{ animation: 'fadeSlideUp 0.7s ease 0.5s both' }}>
-                <div className="flex items-center gap-6 pt-2">
-                  {stats.slice(0, 3).map((s) => (
-                    <div key={s.label}>
-                      <p className={`text-2xl font-extrabold ${s.color}`}>{s.value}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{s.label}</p>
+              {/* Quick stats row */}
+              <Reveal dir="up" delay={440}>
+                <div className="flex flex-wrap gap-6 pt-2">
+                  {[['50K+','Students'],['200+','Subjects'],['1M+','Questions'],['Free','Forever']].map(([v,l]) => (
+                    <div key={l} className="flex flex-col">
+                      <span className="text-2xl font-black bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">{v}</span>
+                      <span className="text-gray-500 text-xs">{l}</span>
                     </div>
                   ))}
                 </div>
-              </div>
+              </Reveal>
             </div>
 
-            {/* RIGHT — Dashboard screenshot with floating badges */}
-            <div
-              className="relative hidden lg:block"
-              style={{ animation: 'fadeSlideLeft 0.9s ease 0.2s both' }}
-            >
-              {/* Glow behind image */}
-              <div className="absolute inset-4 bg-gradient-to-br from-primary-400/30 to-purple-400/30 rounded-3xl blur-2xl" />
+            {/* Right: GIF Player */}
+            <div className="relative">
+              <Reveal dir="right" delay={150}>
+                <GifPlayer className="w-full" autoplay={true} step={3} />
+              </Reveal>
 
-              {/* Main screenshot */}
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-primary-500/20 border border-gray-200/60 dark:border-gray-700/60 ring-1 ring-white/50">
-                <img
-                  src="/dashboard-preview.png"
-                  alt="EduNexa Dashboard Preview"
-                  className="w-full h-auto object-cover"
-                  style={{ transform: `translateY(${scrollY * 0.04}px)` }}
-                />
-                {/* Screenshot overlay gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
-              </div>
-
-              {/* Floating badge 1 */}
-              <div className="absolute -top-4 -left-6 bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-xl border border-gray-100 dark:border-gray-700 flex items-center gap-3 animate-float">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-gray-900 dark:text-white">Session Evaluated</p>
-                  <p className="text-[11px] text-emerald-600 font-semibold">Score: 91% · Mastery Unlocked</p>
-                </div>
-              </div>
-
-              {/* Floating badge 2 */}
-              <div className="absolute -bottom-4 -right-4 bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-xl border border-gray-100 dark:border-gray-700 flex items-center gap-3 animate-float" style={{ animationDelay: '1.2s' }}>
-                <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/50 flex items-center justify-center">
-                  <Brain className="w-5 h-5 text-primary-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-gray-900 dark:text-white">AI Tutor Active</p>
-                  <p className="text-[11px] text-primary-600 font-semibold">Gemini 1.5 Flash · EN / हिंदी</p>
-                </div>
-              </div>
-
-              {/* Floating badge 3 */}
-              <div className="absolute top-1/2 -right-8 bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-2xl px-4 py-3 shadow-xl flex items-center gap-3 animate-float" style={{ animationDelay: '0.6s' }}>
-                <Zap className="w-5 h-5 fill-current" />
-                <div>
-                  <p className="text-xs font-bold">AI Practice</p>
-                  <p className="text-[11px] opacity-90">5 questions ready</p>
-                </div>
-              </div>
+              {/* Floating badges */}
+              <Badge icon={CheckCircle2} label="AI Powered"    sub="Gemini 1.5 Pro"  color="bg-purple-500/30 text-purple-300" style={{ top: '-16px',  left: '-24px', animation: 'floatY 3s ease-in-out infinite' }} />
+              <Badge icon={Zap}          label="Instant Answer" sub="< 2s response"   color="bg-blue-500/30 text-blue-300"     style={{ bottom: '20px', left: '-20px', animation: 'floatY 3.5s ease-in-out infinite 0.6s' }} />
+              <Badge icon={Award}        label="Top Rated"      sub="4.9 ★ by students" color="bg-yellow-500/30 text-yellow-300" style={{ top: '40px',  right: '-20px', animation: 'floatY 4s ease-in-out infinite 1.2s' }} />
             </div>
           </div>
         </div>
 
         {/* Scroll cue */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-gray-400 animate-bounce">
-          <span className="text-xs font-medium">Scroll to explore</span>
-          <ChevronDown className="w-5 h-5" />
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-gray-500 animate-bounce">
+          <span className="text-xs">Scroll to explore</span>
+          <ChevronDown size={18} />
         </div>
       </section>
 
-      {/* ── SCROLL SHOWCASE SECTIONS ── */}
-      <div id="showcase">
-        {scrollSections.map((sec, idx) => (
-          <section key={idx} className={`py-24 ${idx % 2 === 0 ? 'bg-gray-50/80 dark:bg-gray-900/40' : 'bg-white dark:bg-gray-950'}`}>
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className={`grid grid-cols-1 lg:grid-cols-2 gap-16 items-center ${sec.imgSide === 'left' ? '' : ''}`}>
+      {/* ═══════════════════════════════════════════════
+          STATS BAND
+      ═══════════════════════════════════════════════ */}
+      <section className="py-16 border-y border-white/5 bg-white/[0.02]">
+        <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-6">
+          {stats.map((s) => (
+            <StatCard key={s.label} {...s} />
+          ))}
+        </div>
+      </section>
 
-                {/* Text — always LEFT on mobile, alternates on desktop */}
-                <Reveal direction={sec.imgSide === 'right' ? 'left' : 'right'} delay={0}
-                  className={sec.imgSide === 'left' ? 'lg:order-2' : 'lg:order-1'}
-                >
-                  <div className="space-y-6 max-w-lg">
-                    <span className={`inline-block text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full bg-gradient-to-r ${sec.accent} text-white`}>
-                      {sec.tag}
-                    </span>
+      {/* ═══════════════════════════════════════════════
+          FEATURES GRID
+      ═══════════════════════════════════════════════ */}
+      <section id="features" className="py-24">
+        <div className="max-w-7xl mx-auto px-6">
+          <Reveal dir="up" delay={0}>
+            <div className="text-center mb-16">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300 text-sm mb-4">
+                <Sparkles size={13} /> Everything You Need
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">
+                Powerful Features for Every Student
+              </h2>
+              <p className="text-gray-400 max-w-xl mx-auto">
+                From AI-powered tutoring to adaptive practice — every tool is designed to accelerate your learning.
+              </p>
+            </div>
+          </Reveal>
 
-                    <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white leading-tight">
-                      {sec.heading}
-                    </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {features.map((f, i) => (
+              <FeatureCard key={f.title} {...f} delay={i * 60} />
+            ))}
+          </div>
+        </div>
+      </section>
 
-                    <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed">
-                      {sec.body}
-                    </p>
+      {/* ═══════════════════════════════════════════════
+          SHOWCASE SECTIONS (alternating)
+      ═══════════════════════════════════════════════ */}
+      <section id="showcase" className="py-8">
+        {showcaseSections.map(({ frame, dir, textDir, badge, title, desc }, idx) => {
+          const isEven = idx % 2 === 0;
+          return (
+            <div key={idx} className={`py-20 ${idx % 2 === 1 ? 'bg-white/[0.015]' : ''}`}>
+              <div className="max-w-7xl mx-auto px-6">
+                <div className={`grid lg:grid-cols-2 gap-12 items-center ${!isEven ? 'lg:flex-row-reverse' : ''}`} style={{ direction: isEven ? 'ltr' : 'rtl' }}>
 
-                    <ul className="space-y-3">
-                      {sec.bullets.map((b, bIdx) => (
-                        <li key={bIdx} className="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300">
-                          <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${sec.accent} flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm`}>
-                            <CheckCircle2 className="w-3 h-3 text-white" />
-                          </div>
-                          <span>{b}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <Link
-                      to="/register"
-                      className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${sec.accent} text-white font-semibold text-sm shadow-lg hover:-translate-y-0.5 transition-all`}
-                    >
-                      Try It Now <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-                </Reveal>
-
-                {/* Image */}
-                <Reveal direction={sec.imgSide === 'right' ? 'right' : 'left'} delay={100}
-                  className={sec.imgSide === 'left' ? 'lg:order-1' : 'lg:order-2'}
-                >
-                  <div className="relative group">
-                    {/* Glow */}
-                    <div className={`absolute inset-4 bg-gradient-to-br ${sec.accent} opacity-20 rounded-3xl blur-2xl group-hover:opacity-30 transition-all duration-700`} />
-
-                    <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-gray-200/60 dark:border-gray-700/60 ring-1 ring-white/40 group-hover:scale-[1.01] transition-transform duration-500">
-                      <img
-                        src="/dashboard-preview.png"
-                        alt={`EduNexa — ${sec.tag}`}
-                        className="w-full h-auto object-cover"
-                        style={{ maxHeight: '380px', objectPosition: idx === 0 ? 'top' : idx === 1 ? 'center' : 'bottom' }}
-                      />
-                      {/* Overlay tint matching section accent */}
-                      <div className={`absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none`} />
-
-                      {/* Section-specific corner badge */}
-                      <div className="absolute top-3 left-3">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r ${sec.accent} text-white text-[11px] font-bold shadow-md`}>
-                          <Sparkles className="w-3 h-3" />
-                          {sec.tag}
-                        </span>
-                      </div>
+                  {/* Image side */}
+                  <Reveal dir={dir} delay={0}>
+                    <div style={{ direction: 'ltr' }}>
+                      <FrameSnap frame={frame} alt={title} />
                     </div>
+                  </Reveal>
+
+                  {/* Text side */}
+                  <div style={{ direction: 'ltr' }} className="flex flex-col gap-5">
+                    <Reveal dir={textDir} delay={100}>
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-300 text-xs w-fit">
+                        <Zap size={11} /> {badge}
+                      </span>
+                    </Reveal>
+                    <Reveal dir={textDir} delay={180}>
+                      <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight">{title}</h2>
+                    </Reveal>
+                    <Reveal dir={textDir} delay={260}>
+                      <p className="text-gray-400 leading-relaxed">{desc}</p>
+                    </Reveal>
+                    <Reveal dir={textDir} delay={340}>
+                      <Link
+                        to="/register"
+                        className="group inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 font-semibold text-sm transition-colors"
+                      >
+                        Try it free <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+                      </Link>
+                    </Reveal>
                   </div>
-                </Reveal>
+
+                </div>
               </div>
             </div>
-          </section>
-        ))}
-      </div>
-
-      {/* ── FEATURES GRID ── */}
-      <section id="features" className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal direction="up" className="text-center max-w-3xl mx-auto mb-16">
-            <p className="text-xs font-bold text-primary-600 dark:text-primary-400 uppercase tracking-widest mb-2">Everything in One Place</p>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white">
-              Engineered for Academic &amp; Career Excellence
-            </h2>
-            <p className="mt-4 text-gray-500 dark:text-gray-400">
-              Stop juggling disconnected apps. EduNexa integrates study notes, AI tutoring, live exams, DSA prep, and career tools.
-            </p>
-          </Reveal>
-
-          <div id="ai-suite" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((f, i) => (
-              <Reveal key={i} direction="up" delay={i * 60} className="h-full">
-                <div className={`h-full p-6 rounded-2xl border border-gray-200/80 dark:border-gray-800 bg-white dark:bg-gray-900 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary-500/10 transition-all duration-300 group`}>
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${f.color} flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    <f.icon className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{f.title}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{f.desc}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
+          );
+        })}
       </section>
 
-      {/* ── HOW IT WORKS ── */}
-      <section className="py-24 bg-white dark:bg-gray-950">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal direction="up" className="text-center mb-16">
-            <p className="text-xs font-bold text-primary-600 uppercase tracking-widest mb-2">Simple Workflow</p>
-            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">Three Steps to Mastery</h2>
-          </Reveal>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              { step: '01', icon: BookOpen, title: 'Enroll & Learn',    desc: 'Browse university curriculum tracks or tech skills. Access structured notes, videos, and semester content.',    color: 'from-primary-500 to-indigo-600' },
-              { step: '02', icon: Brain,    title: 'Practice with AI',  desc: 'Study any topic → EduNexa auto-generates personalised MCQs, coding challenges, and rubric-scored written tasks.', color: 'from-amber-500 to-orange-500' },
-              { step: '03', icon: Award,    title: 'Ace Placements',     desc: 'Track mastery metrics, crack company mock assessments, and get your personalised career roadmap.',              color: 'from-emerald-500 to-teal-600' },
-            ].map((item, idx) => (
-              <Reveal key={idx} direction="up" delay={idx * 120}>
-                <div className="relative p-8 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-center hover:-translate-y-1 hover:shadow-lg transition-all group">
-                  <span className="absolute top-4 right-5 text-6xl font-black text-gray-100 dark:text-gray-800 select-none group-hover:text-primary-100 dark:group-hover:text-primary-950 transition-colors">
-                    {item.step}
-                  </span>
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center mx-auto mb-5 shadow-xl relative z-10`}>
-                    <item.icon className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">{item.title}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{item.desc}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── STATS BAND ── */}
-      <section className="py-16 bg-gradient-to-r from-primary-600 via-indigo-600 to-purple-700">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center text-white">
-            {stats.map((s, i) => (
-              <Reveal key={i} direction="up" delay={i * 80}>
-                <div>
-                  <p className="text-4xl font-extrabold">{s.value}</p>
-                  <p className="text-sm text-primary-100 mt-1 font-medium">{s.label}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── TESTIMONIALS ── */}
-      <section id="testimonials" className="py-24 bg-gray-50/70 dark:bg-gray-900/40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal direction="up" className="text-center mb-14">
-            <p className="text-xs font-bold text-primary-600 uppercase tracking-widest mb-2">Student Stories</p>
-            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">Real Students. Real Results.</h2>
-          </Reveal>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {testimonials.map((t, i) => (
-              <Reveal key={i} direction="up" delay={i * 100}>
-                <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all h-full flex flex-col">
-                  <div className="flex mb-3">
-                    {Array.from({ length: t.rating }).map((_, si) => (
-                      <Star key={si} className="w-4 h-4 text-amber-400 fill-amber-400" />
-                    ))}
-                  </div>
-                  <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed flex-1 italic">
-                    "{t.text}"
-                  </p>
-                  <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                      {t.name[0]}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm text-gray-900 dark:text-white">{t.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{t.role}</p>
-                    </div>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── FINAL CTA ── */}
-      <section className="py-24 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-indigo-700 to-purple-800" />
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 left-0 w-96 h-96 bg-white rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-0 w-80 h-80 bg-white rounded-full blur-3xl" />
-        </div>
-
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
-          <Reveal direction="up">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 backdrop-blur-sm text-white text-xs font-semibold mb-6 border border-white/20">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              Start Your Journey Today — It's Free
+      {/* ═══════════════════════════════════════════════
+          HOW IT WORKS
+      ═══════════════════════════════════════════════ */}
+      <section id="how-it-works" className="py-24 bg-white/[0.02] border-y border-white/5">
+        <div className="max-w-6xl mx-auto px-6">
+          <Reveal dir="up">
+            <div className="text-center mb-16">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-sm mb-4">
+                <Target size={13} /> Simple Process
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">How EduNexa Works</h2>
+              <p className="text-gray-400 max-w-md mx-auto">Get started in minutes. No prior setup required.</p>
             </div>
-            <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-tight">
-              Ready to Transform<br />Your Learning Journey?
+          </Reveal>
+          <div className="grid sm:grid-cols-3 gap-6">
+            {steps.map((s, i) => <StepCard key={i} {...s} delay={i * 120} />)}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════
+          FULL-WIDTH GIF BANNER
+      ═══════════════════════════════════════════════ */}
+      <section className="py-24">
+        <div className="max-w-7xl mx-auto px-6">
+          <Reveal dir="up">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl sm:text-4xl font-black text-white mb-3">See EduNexa in Action</h2>
+              <p className="text-gray-400">Live preview of the full platform experience</p>
+            </div>
+          </Reveal>
+          <Reveal dir="zoom" delay={100}>
+            <GifPlayer className="max-w-4xl mx-auto" autoplay={true} step={2} />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════
+          TESTIMONIALS
+      ═══════════════════════════════════════════════ */}
+      <section id="testimonials" className="py-24 bg-white/[0.02] border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6">
+          <Reveal dir="up">
+            <div className="text-center mb-16">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm mb-4">
+                <Star size={13} className="fill-yellow-400" /> Student Reviews
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">Loved by 50,000+ Students</h2>
+              <p className="text-gray-400 max-w-md mx-auto">Don't take our word for it. Here's what students across India are saying.</p>
+            </div>
+          </Reveal>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {testimonials.map((t, i) => <TestiCard key={i} {...t} />)}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════
+          TRUST BADGES
+      ═══════════════════════════════════════════════ */}
+      <section className="py-16 border-y border-white/5">
+        <div className="max-w-6xl mx-auto px-6">
+          <Reveal dir="up">
+            <div className="flex flex-wrap justify-center gap-8 text-gray-500 text-sm">
+              {[
+                { icon: Shield,     label: 'Secure & Private' },
+                { icon: Zap,        label: 'Powered by Gemini AI' },
+                { icon: Users,      label: '50,000+ Students' },
+                { icon: Star,       label: '4.9/5 Rating' },
+                { icon: CheckCircle2, label: '100% Free to Start' },
+              ].map(({ icon: Icon, label }) => (
+                <div key={label} className="flex items-center gap-2 hover:text-gray-300 transition-colors">
+                  <Icon size={16} className="text-purple-400" />
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════
+          FINAL CTA
+      ═══════════════════════════════════════════════ */}
+      <section className="py-28 relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-[-20%] left-[10%]  w-[400px] h-[400px] bg-purple-600/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-[-20%] right-[10%] w-[400px] h-[400px] bg-blue-600/20   rounded-full blur-3xl" />
+        </div>
+        <div className="relative max-w-3xl mx-auto px-6 text-center">
+          <Reveal dir="zoom" delay={0}>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300 text-sm mb-6">
+              <GraduationCap size={14} /> Join the Movement
+            </div>
+          </Reveal>
+          <Reveal dir="up" delay={80}>
+            <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 leading-tight">
+              Ready to Transform<br />
+              <span className="bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                Your Studies?
+              </span>
             </h2>
-            <p className="mt-5 text-lg text-primary-100 max-w-2xl mx-auto">
-              Join thousands of students using EduNexa to ace university exams, crack placements, and build their future with AI.
+          </Reveal>
+          <Reveal dir="up" delay={160}>
+            <p className="text-gray-400 text-lg mb-10 leading-relaxed">
+              Join 50,000+ students who are already studying smarter with AI.
+              No credit card required. Start free today.
             </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+          </Reveal>
+          <Reveal dir="up" delay={240}>
+            <div className="flex flex-wrap justify-center gap-4">
               <Link
                 to="/register"
-                className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl bg-white text-primary-700 font-bold text-base shadow-xl hover:bg-gray-50 hover:-translate-y-0.5 transition-all"
+                className="group flex items-center gap-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white px-10 py-4 rounded-xl font-bold text-base shadow-2xl shadow-purple-500/30 transition-all duration-300 hover:scale-105"
               >
-                Sign Up For Free
-                <ArrowRight className="w-5 h-5" />
+                Create Free Account <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link
                 to="/login"
-                className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl border border-white/30 text-white font-semibold text-base hover:bg-white/10 transition-all"
+                className="flex items-center gap-2 border border-white/20 hover:border-white/40 text-white px-10 py-4 rounded-xl font-bold text-base transition-all duration-300 hover:bg-white/5"
               >
-                Sign In to Dashboard
+                Already a member? Login
               </Link>
             </div>
           </Reveal>
         </div>
       </section>
 
-      {/* ── FOOTER ── */}
-      <footer className="bg-gray-950 text-gray-400 py-12 border-t border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <GraduationCap className="w-4 h-4 text-white" />
+      {/* ═══════════════════════════════════════════════
+          FOOTER
+      ═══════════════════════════════════════════════ */}
+      <footer className="border-t border-white/10 bg-gray-950 py-12">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid sm:grid-cols-4 gap-8 mb-10">
+            {/* Brand */}
+            <div className="sm:col-span-2">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="p-1.5 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500">
+                  <GraduationCap size={18} className="text-white" />
+                </span>
+                <span className="text-lg font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">EduNexa</span>
               </div>
-              <span className="text-lg font-extrabold text-white">EduNexa</span>
-              <span className="text-xs text-gray-600 ml-2">© {new Date().getFullYear()} All rights reserved.</span>
+              <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
+                India's #1 AI-powered education platform. Study smarter, practice better, and achieve more.
+              </p>
             </div>
-            <div className="flex gap-6 text-sm">
-              <a href="#features"    className="hover:text-white transition-colors">Features</a>
-              <a href="#showcase"    className="hover:text-white transition-colors">Platform</a>
-              <Link to="/courses"    className="hover:text-white transition-colors">Courses</Link>
-              <Link to="/community"  className="hover:text-white transition-colors">Community</Link>
-              <Link to="/login"      className="hover:text-white transition-colors">Login</Link>
+
+            {/* Platform links */}
+            <div>
+              <h4 className="text-white font-semibold text-sm mb-4">Platform</h4>
+              <ul className="space-y-2">
+                {['AI Tutor','Practice','DSA Learning','Quizzes','Study Planner'].map(l => (
+                  <li key={l}><Link to="/register" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">{l}</Link></li>
+                ))}
+              </ul>
             </div>
+
+            {/* Account links */}
+            <div>
+              <h4 className="text-white font-semibold text-sm mb-4">Account</h4>
+              <ul className="space-y-2">
+                {[['Login','/login'],['Register','/register'],['Dashboard','/dashboard']].map(([l,h]) => (
+                  <li key={l}><Link to={h} className="text-gray-500 hover:text-gray-300 text-sm transition-colors">{l}</Link></li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-gray-600 text-xs">© 2024 EduNexa. All rights reserved.</p>
+            <p className="text-gray-600 text-xs flex items-center gap-1">
+              Made with <span className="text-red-500">♥</span> for Indian students
+            </p>
           </div>
         </div>
       </footer>
 
-      {/* ── KEYFRAME STYLES ── */}
+      {/* ─── CSS Animations (injected inline) ─────────── */}
       <style>{`
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(40px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeSlideLeft {
-          from { opacity: 0; transform: translateX(60px); }
-          to   { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
+        @keyframes floatY {
+          0%, 100% { transform: translateY(0px);  }
           50%       { transform: translateY(-10px); }
         }
-        .animate-float {
-          animation: float 4s ease-in-out infinite;
-        }
+        html { scroll-behavior: smooth; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #030712; }
+        ::-webkit-scrollbar-thumb { background: #6b21a8; border-radius: 10px; }
       `}</style>
+
     </div>
   );
 }
