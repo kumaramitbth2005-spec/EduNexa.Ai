@@ -5,7 +5,6 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const CANDIDATE_MODELS = [
   'gemini-3.5-flash-lite',
-  'gemini-flash-latest',
   'gemini-3.5-flash',
 ];
 
