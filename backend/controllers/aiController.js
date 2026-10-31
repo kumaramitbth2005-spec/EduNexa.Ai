@@ -5,10 +5,16 @@ const User = require('../models/User');
 let genAI = null;
 const getGenAI = () => {
   if (!genAI) {
-    if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const rawKey = (process.env.GEMINI_API_KEY || '').trim();
+    if (!rawKey) throw new Error('GEMINI_API_KEY not configured');
+    genAI = new GoogleGenerativeAI(rawKey);
   }
   return genAI;
+};
+
+// Auto-resolving active model
+const getAIModel = (ai, modelName = 'gemini-3.5-flash') => {
+  return ai.getGenerativeModel({ model: modelName });
 };
 
 const DAILY_LIMIT = 50;
@@ -59,7 +65,7 @@ exports.chat = async (req, res, next) => {
 
     // Build chat history for Gemini
     const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = getAIModel(ai);
 
     const systemPrompt = `You are EduNexa AI Tutor — an intelligent, friendly and helpful educational assistant.
 Your role is to help students understand difficult concepts clearly and accurately.
@@ -116,7 +122,7 @@ exports.summarizePDF = async (req, res, next) => {
     }
 
     const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = getAIModel(ai);
 
     const prompt = `You are an expert educational content analyzer.
 Analyze the following document${fileName ? ` titled "${fileName}"` : ''} and provide:
@@ -168,7 +174,7 @@ exports.generateQuestions = async (req, res, next) => {
     }
 
     const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = getAIModel(ai);
 
     const typeInstructions = {
       mcq: `Generate ${count} Multiple Choice Questions (MCQ). Each must have exactly 4 options (A, B, C, D) with exactly one correct answer.`,
@@ -232,7 +238,7 @@ exports.generateStudyPlan = async (req, res, next) => {
     }
 
     const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = getAIModel(ai);
 
     const prompt = `You are an expert academic coach. Create a personalized study plan.
 
@@ -283,7 +289,7 @@ exports.translate = async (req, res, next) => {
     }
 
     const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = getAIModel(ai);
 
     const langName = targetLanguage === 'hi' ? 'Hindi (Devanagari)' : 'English';
     const prompt = `Translate the following educational content to ${langName}. Maintain technical terms where appropriate. Return ONLY the translation, no explanation:\n\n${text}`;

@@ -14,8 +14,9 @@ const Syllabus = require('../models/Syllabus');
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const getGenAI = () => {
-  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
-  return new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const rawKey = (process.env.GEMINI_API_KEY || '').trim();
+  if (!rawKey) throw new Error('GEMINI_API_KEY not configured');
+  return new GoogleGenerativeAI(rawKey);
 };
 
 /**
@@ -24,7 +25,7 @@ const getGenAI = () => {
  */
 const ocrImage = async (fileBuffer, mimeType) => {
   const ai = getGenAI();
-  const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
   const imagePart = {
     inlineData: {
@@ -186,7 +187,7 @@ exports.uploadDocument = async (req, res, next) => {
     if (ocrResult.text && ocrResult.confidence !== 'failed') {
       try {
         const ai = getGenAI();
-        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
         const detectPrompt = `Based on the following extracted text from student notes, identify:
 1. The most likely academic subject (e.g., "Data Structures", "Physics", "Mathematics")
 2. Up to 8 specific topics covered
@@ -344,7 +345,7 @@ exports.analyzeDocument = async (req, res, next) => {
 
     // Build analysis prompt
     const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
     let syllabusContext = '';
     if (syllabus && syllabus.topics?.length > 0) {

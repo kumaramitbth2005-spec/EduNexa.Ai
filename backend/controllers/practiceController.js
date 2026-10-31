@@ -203,7 +203,7 @@ exports.generatePractice = async (req, res, next) => {
     if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
       try {
         const ai = getGenAI();
-        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
         const prompt = `You are an elite Computer Science Professor and Technical Interview Evaluator.
 Generate a high-yield, personalized practice session for the topic: "${trimmedTopic}".
@@ -406,7 +406,7 @@ exports.submitPractice = async (req, res, next) => {
     if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
       try {
         const ai = getGenAI();
-        aiModel = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        aiModel = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
       } catch (e) {
         aiModel = null;
       }
