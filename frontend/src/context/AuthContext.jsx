@@ -22,8 +22,15 @@ export const AuthProvider = ({ children }) => {
         try {
           setUser(JSON.parse(savedUser));
           const { data } = await authService.getMe();
-          setUser(data.user);
-          localStorage.setItem('edunexa_user', JSON.stringify(data.user));
+          if (data?.user?.isEmailVerified) {
+            setUser(data.user);
+            localStorage.setItem('edunexa_user', JSON.stringify(data.user));
+          } else {
+            // Unverified user token should not persist
+            localStorage.removeItem('edunexa_token');
+            localStorage.removeItem('edunexa_user');
+            setUser(null);
+          }
         } catch {
           localStorage.removeItem('edunexa_token');
           localStorage.removeItem('edunexa_user');
@@ -35,19 +42,43 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
+  // Step 1 of Login (Credentials Check)
   const login = useCallback(async (email, password) => {
     const { data } = await authService.login({ email, password });
-    localStorage.setItem('edunexa_token', data.token);
-    localStorage.setItem('edunexa_user', JSON.stringify(data.user));
-    setUser(data.user);
     return data;
   }, []);
 
+  // Step 2 of Login (OTP Verification -> Issue Session)
+  const verifyLoginOtp = useCallback(async ({ email, otp, tempToken }) => {
+    const { data } = await authService.verifyLoginOtp({ email, otp, tempToken });
+    if (data?.token && data?.user) {
+      localStorage.setItem('edunexa_token', data.token);
+      localStorage.setItem('edunexa_user', JSON.stringify(data.user));
+      setUser(data.user);
+    }
+    return data;
+  }, []);
+
+  // Registration
   const register = useCallback(async (formData) => {
     const { data } = await authService.register(formData);
-    localStorage.setItem('edunexa_token', data.token);
-    localStorage.setItem('edunexa_user', JSON.stringify(data.user));
-    setUser(data.user);
+    return data;
+  }, []);
+
+  // Email Verification via OTP
+  const verifyEmailOtp = useCallback(async ({ email, otp }) => {
+    const { data } = await authService.verifyEmailOtp({ email, otp });
+    if (data?.token && data?.user) {
+      localStorage.setItem('edunexa_token', data.token);
+      localStorage.setItem('edunexa_user', JSON.stringify(data.user));
+      setUser(data.user);
+    }
+    return data;
+  }, []);
+
+  // Resend OTP
+  const resendOtp = useCallback(async ({ email, purpose }) => {
+    const { data } = await authService.resendOtp({ email, purpose });
     return data;
   }, []);
 
@@ -75,13 +106,31 @@ export const AuthProvider = ({ children }) => {
     });
   }, []);
 
-  const isAuthenticated = !!user;
+  const isAuthenticated = !!user && user.isEmailVerified !== false;
   const isStudent = user?.role === 'student';
   const isTeacher = user?.role === 'teacher';
   const isAdmin = user?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated, isStudent, isTeacher, isAdmin, login, register, logout, updateUser, darkMode, toggleDarkMode }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        isAuthenticated,
+        isStudent,
+        isTeacher,
+        isAdmin,
+        login,
+        verifyLoginOtp,
+        register,
+        verifyEmailOtp,
+        resendOtp,
+        logout,
+        updateUser,
+        darkMode,
+        toggleDarkMode,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -92,4 +141,3 @@ export const useAuth = () => {
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
 };
-

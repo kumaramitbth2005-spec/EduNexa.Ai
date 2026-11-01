@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import LoadingScreen from '../components/common/LoadingScreen';
 import DashboardLayout from '../components/layout/DashboardLayout';
@@ -11,6 +11,7 @@ const Register = lazy(() => import('../pages/auth/Register'));
 const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'));
 const ResetPassword = lazy(() => import('../pages/auth/ResetPassword'));
 const VerifyEmail = lazy(() => import('../pages/auth/VerifyEmail'));
+const VerifyLoginOtp = lazy(() => import('../pages/auth/VerifyLoginOtp'));
 
 // Student
 const StudentDashboard = lazy(() => import('../pages/student/Dashboard'));
@@ -70,18 +71,29 @@ const UserManagement = lazy(() => import('../pages/admin/UserManagement'));
 // Guard components
 const ProtectedRoute = ({ children, roles }) => {
   const { isAuthenticated, user, loading } = useAuth();
+  const location = useLocation();
+
   if (loading) return <LoadingScreen />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    // Preserve requested path and query string so user returns here after login
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
+  const location = useLocation();
+
   if (loading) return <LoadingScreen />;
   if (isAuthenticated) {
+    const fromPath = location.state?.from?.pathname;
+    if (fromPath && fromPath !== '/login') {
+      return <Navigate to={fromPath} replace />;
+    }
     const redirectMap = { admin: '/admin', teacher: '/teacher', student: '/dashboard' };
-    return <Navigate to={redirectMap[user.role] || '/dashboard'} replace />;
+    return <Navigate to={redirectMap[user?.role] || '/dashboard'} replace />;
   }
   return children;
 };
@@ -90,13 +102,16 @@ export default function AppRoutes() {
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
-        {/* Public */}
+        {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/verify-login" element={<VerifyLoginOtp />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/verify-email/:token" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/verify-certificate/:certificateId?" element={<VerifyCertificate />} />
 
         {/* Student Routes */}

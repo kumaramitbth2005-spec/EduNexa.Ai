@@ -2,12 +2,14 @@ import api from './api';
 
 export const authService = {
   register: (data) => api.post('/auth/register', data),
+  verifyEmailOtp: (data) => api.post('/auth/verify-email-otp', data),
   login: (data) => api.post('/auth/login', data),
+  verifyLoginOtp: (data) => api.post('/auth/verify-login-otp', data),
+  resendOtp: (data) => api.post('/auth/resend-otp', data),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
-  resetPassword: (token, password) => api.post(`/auth/reset-password/${token}`, { password }),
-  verifyEmail: (token) => api.get(`/auth/verify-email/${token}`),
+  resetPassword: (data) => api.post('/auth/reset-password', data),
 };
 
 export const userService = {

@@ -12,7 +12,35 @@ async function runFullIntegrationTest() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'student@edunexa.com', password: 'Password123!' }),
   });
-  const { token, user } = await loginRes.json();
+  const loginData = await loginRes.json();
+
+  let token = loginData.token;
+  let user = loginData.user;
+
+  if (loginData.requiresLoginOtp) {
+    const mongoose = require('mongoose');
+    await mongoose.connect('mongodb://127.0.0.1:27017/edunexa');
+    const Otp = require('./models/Otp');
+    const otpRec = await Otp.findOne({ email: 'student@edunexa.com', purpose: 'login_verification', isUsed: false }).sort({ createdAt: -1 });
+    const crypto = require('crypto');
+    let foundOtp = '';
+    for (let c = 100000; c <= 999999; c++) {
+      if (crypto.createHash('sha256').update(String(c)).digest('hex') === otpRec.otpHash) {
+        foundOtp = String(c);
+        break;
+      }
+    }
+    const verifyRes = await fetch('http://localhost:5000/api/auth/verify-login-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'student@edunexa.com', otp: foundOtp, tempToken: loginData.tempToken }),
+    });
+    const verifyData = await verifyRes.json();
+    token = verifyData.token;
+    user = verifyData.user;
+    await mongoose.disconnect();
+  }
+
   console.log(`✅ Authenticated as: ${user.name} (${user.email})`);
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
