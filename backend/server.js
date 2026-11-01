@@ -208,5 +208,18 @@ server.listen(PORT, () => {
   console.log(`📧 Email: ${process.env.EMAIL_USER ? '✅ Configured' : '⚠️  Not configured'}\n`);
 });
 
+// Automatic fallback redirector for users visiting port 5174
+try {
+  const http = require('http');
+  const redirectServer = http.createServer((req, res) => {
+    res.writeHead(302, { Location: `http://localhost:5173${req.url || ''}` });
+    res.end();
+  });
+  redirectServer.on('error', () => {});
+  redirectServer.listen(5174, '0.0.0.0', () => {
+    console.log(`🔗 Port 5174 redirector active (forwards to http://localhost:5173)`);
+  });
+} catch (_) {}
+
 module.exports = { app, server, io };
 
