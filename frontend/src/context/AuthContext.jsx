@@ -45,6 +45,12 @@ export const AuthProvider = ({ children }) => {
   // Step 1 of Login (Credentials Check)
   const login = useCallback(async (email, password) => {
     const { data } = await authService.login({ email, password });
+    // Dev mode or future direct auth: token returned immediately without 2FA
+    if (data?.token && data?.user) {
+      localStorage.setItem('edunexa_token', data.token);
+      localStorage.setItem('edunexa_user', JSON.stringify(data.user));
+      setUser(data.user);
+    }
     return data;
   }, []);
 
@@ -62,6 +68,11 @@ export const AuthProvider = ({ children }) => {
   // Registration
   const register = useCallback(async (formData) => {
     const { data } = await authService.register(formData);
+    if (data?.token && data?.user) {
+      localStorage.setItem('edunexa_token', data.token);
+      localStorage.setItem('edunexa_user', JSON.stringify(data.user));
+      setUser(data.user);
+    }
     return data;
   }, []);
 

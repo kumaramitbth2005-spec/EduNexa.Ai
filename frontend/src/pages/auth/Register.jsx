@@ -15,7 +15,7 @@ export default function Register() {
     branch: '',
     semester: 1,
   });
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,6 +56,12 @@ export default function Register() {
     try {
       setLoading(true);
       const res = await register(formData);
+
+      if (res.token && res.user) {
+        toast.success(`Account created! Welcome, ${res.user.name}`);
+        navigate('/dashboard', { replace: true });
+        return;
+      }
 
       toast.success(res.message || 'Registration successful! Verification code sent to your email.');
 

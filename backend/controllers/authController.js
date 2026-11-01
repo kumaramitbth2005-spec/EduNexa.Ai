@@ -77,7 +77,10 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Create new unverified user
+    // Create new user
+    const emailConfigured = process.env.EMAIL_USER && process.env.EMAIL_USER.trim();
+    const isDevMode = process.env.NODE_ENV !== 'production' && !emailConfigured;
+
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
@@ -86,8 +89,19 @@ exports.register = async (req, res, next) => {
       college: college || '',
       branch: branch || '',
       semester: semester || 1,
-      isEmailVerified: false,
+      isEmailVerified: isDevMode ? true : false,
     });
+
+    if (isDevMode) {
+      const token = signToken(user._id);
+      console.log(`[DEV] Registration auto-verified for ${normalizedEmail} (EMAIL_USER not configured).`);
+      return res.status(201).json({
+        success: true,
+        message: 'Registration successful! (Development mode — email auto-verified).',
+        token,
+        user: sanitizeUser(user),
+      });
+    }
 
     // Send 6-digit email verification OTP
     try {
@@ -201,6 +215,25 @@ exports.login = async (req, res, next) => {
         message: 'Your email address is not verified. A verification code has been sent to your Gmail inbox.',
       });
     }
+
+    // ── DEVELOPMENT MODE BYPASS ──────────────────────────────────────────────
+    // When EMAIL_USER is not configured, skip 2FA and issue the access token
+    // directly so developers can test the app without a Gmail account.
+    const emailConfigured = process.env.EMAIL_USER && process.env.EMAIL_USER.trim();
+    if (process.env.NODE_ENV !== 'production' && !emailConfigured) {
+      user.lastLogin = new Date();
+      if (typeof user.updateStreak === 'function') user.updateStreak();
+      await user.save({ validateBeforeSave: false });
+      const token = signToken(user._id);
+      console.log('[DEV] 2FA bypassed — EMAIL_USER not set. Issuing token directly.');
+      return res.status(200).json({
+        success: true,
+        message: 'Login successful (development mode – 2FA bypassed because Gmail is not configured).',
+        token,
+        user: sanitizeUser(user),
+      });
+    }
+    // ── END DEV BYPASS ───────────────────────────────────────────────────────
 
     // Step 2: User credentials valid and verified. Send 6-digit Login OTP (2FA)
     try {
