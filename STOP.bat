@@ -17,3 +17,4 @@ for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":5173 "') do (
 echo.
 echo  All EduNexa servers stopped.
 timeout /t 2 /nobreak >nul
+

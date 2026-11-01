@@ -41,3 +41,4 @@ start "" "http://localhost:5173"
 
 echo  Press any key to close this launcher window...
 pause >nul
+

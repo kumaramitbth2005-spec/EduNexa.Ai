@@ -12,3 +12,4 @@ router.get('/:id', protect, getAssignment);
 router.post('/:id/submit', protect, submitAssignment);
 
 module.exports = router;
+

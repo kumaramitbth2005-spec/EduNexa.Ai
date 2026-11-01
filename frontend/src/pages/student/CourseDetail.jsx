@@ -5,7 +5,7 @@ import ProgressBar from '../../components/ui/ProgressBar';
 import {
   BookOpen, Clock, Users, Star, CheckCircle, Play, FileText,
   HelpCircle, ChevronDown, ChevronUp, User, ArrowLeft, Lock,
-  Sparkles, RefreshCw, AlertTriangle, Layers, Award, ExternalLink
+  Sparkles, RefreshCw, AlertTriangle, Layers, Award, ExternalLink, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 

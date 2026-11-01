@@ -19,3 +19,4 @@ router.get('/verify/:certificateId', verifyCertificate);
 router.get('/:certificateId', optionalAuth, getCertificateDetails);
 
 module.exports = router;
+

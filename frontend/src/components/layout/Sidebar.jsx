@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, BookOpen, FileText, Brain, PenSquare, Users, Briefcase,
   GraduationCap, Settings, LogOut, X, ChevronRight, Zap, Star, Trophy,
-  MessageSquare, BarChart3, UserCheck, Shield, Terminal, Layers
+  MessageSquare, BarChart3, UserCheck, Shield, Terminal, Layers, Award
 } from 'lucide-react';
 
 const studentNav = [
