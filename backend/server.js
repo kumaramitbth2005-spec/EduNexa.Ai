@@ -114,6 +114,7 @@ connectDB();
 // ── Security Middleware ───────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
 }));
 
 app.use(cors({
@@ -190,9 +191,21 @@ app.use('/api/practice', practiceRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/certificates', certificateRoutes);
 
-// 404
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found.` });
+// ── Production Frontend Serving ──────────────────────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  const frontendDist = path.join(__dirname, '../frontend/dist');
+  app.use(express.static(frontendDist));
+  
+  // All remaining non-API GET requests serve the React frontend index.html
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
+
+// 404 for unhandled API requests
+app.use('/api', (req, res) => {
+  res.status(404).json({ success: false, message: `API route ${req.originalUrl} not found.` });
 });
 
 // Global Error Handler

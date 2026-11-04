@@ -5,10 +5,12 @@
   "private": true,
   "scripts": {
     "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
     "dev": "concurrently --kill-others-on-fail --names \"BACKEND,FRONTEND\" --prefix-colors \"cyan,magenta\" \"npm run start --prefix backend\" \"npm run dev --prefix frontend\"",
     "dev:backend": "npm run start --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
-    "start": "npm run dev"
+    "start": "npm run dev",
+    "start:prod": "node backend/server.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
