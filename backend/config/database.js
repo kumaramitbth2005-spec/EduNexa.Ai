@@ -1,4 +1,10 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// Fallback to reliable public DNS resolvers to ensure MongoDB Atlas SRV lookups work across all ISPs/OSs
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (_) {}
 
 let isConnecting = false;
 

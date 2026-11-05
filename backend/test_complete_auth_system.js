@@ -1,15 +1,24 @@
+require('dotenv').config();
+const dns = require('dns');
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (_) {}
+
 const mongoose = require('mongoose');
 const Otp = require('./models/Otp');
 const User = require('./models/User');
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = process.env.TEST_API_URL || 'http://localhost:5000/api';
 
 async function runAuthTests() {
   console.log('================================================================');
   console.log('🔒 TESTING EDUNEXA COMPLETE AUTHENTICATION & OTP 2FA SYSTEM');
   console.log('================================================================\n');
 
-  await mongoose.connect('mongodb://127.0.0.1:27017/edunexa');
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/edunexa';
+  console.log(`Connecting test suite to MongoDB...`);
+  await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
+  console.log(`MongoDB connected for test verification: ${mongoose.connection.host}\n`);
 
   const testEmail = `test_student_${Date.now()}@gmail.com`;
   const testPassword = 'Password123!';
@@ -299,3 +308,4 @@ async function runAuthTests() {
 }
 
 runAuthTests();
+

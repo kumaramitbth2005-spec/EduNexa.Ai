@@ -57,12 +57,6 @@ export default function Register() {
       setLoading(true);
       const res = await register(formData);
 
-      if (res.token && res.user) {
-        toast.success(`Account created! Welcome, ${res.user.name}`);
-        navigate('/dashboard', { replace: true });
-        return;
-      }
-
       toast.success(res.message || 'Registration successful! Verification code sent to your email.');
 
       // Redirect immediately to email verification OTP page
@@ -70,7 +64,12 @@ export default function Register() {
         state: { email: formData.email.toLowerCase().trim() },
       });
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed. Please try again.');
+      const errMsg =
+        err.response?.data?.message ||
+        (err.message === 'Network Error'
+          ? 'Cannot connect to EduNexa server. Please check your network or server status.'
+          : err.message || 'Registration failed. Please try again.');
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }

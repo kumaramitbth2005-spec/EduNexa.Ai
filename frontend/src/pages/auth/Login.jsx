@@ -68,7 +68,12 @@ export default function Login() {
         });
         return;
       }
-      toast.error(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      const errMsg =
+        err.response?.data?.message ||
+        (err.message === 'Network Error'
+          ? 'Cannot connect to EduNexa server. Please check your network or server status.'
+          : err.message || 'Login failed. Please check your credentials.');
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }
