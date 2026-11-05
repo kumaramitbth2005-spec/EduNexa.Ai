@@ -10,6 +10,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
+const mongoose = require('mongoose');
 
 // Pre-register Mongoose models to prevent MissingSchemaError
 require('./models/User');
@@ -160,16 +161,31 @@ if (process.env.NODE_ENV === 'development') {
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
+  const dbStateMap = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
   res.status(200).json({
     success: true,
     message: 'EduNexa API is running',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
+    database: dbStateMap[mongoose.connection.readyState] || 'unknown',
+    databaseConnected: mongoose.connection.readyState === 1,
     aiConfigured: !!process.env.GEMINI_API_KEY,
     emailConfigured: !!process.env.EMAIL_USER,
     storageConfigured: !!process.env.CLOUDINARY_CLOUD_NAME,
   });
+});
+
+// Database readiness check for API routes (except /api/health)
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  if (mongoose.connection.readyState !== 1 && mongoose.connection.readyState !== 2) {
+    return res.status(503).json({
+      success: false,
+      message: 'Database is currently connecting or not configured. Please ensure MONGODB_URI is set in your Render Environment Variables.',
+    });
+  }
+  next();
 });
 
 // ── API Routes ────────────────────────────────────────────────────────────────
