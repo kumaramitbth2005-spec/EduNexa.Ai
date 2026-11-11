@@ -64,11 +64,16 @@ export default function Register() {
         state: { email: formData.email.toLowerCase().trim() },
       });
     } catch (err) {
-      const errMsg =
-        err.response?.data?.message ||
-        (err.message === 'Network Error'
-          ? 'Cannot connect to EduNexa server. Please check your network or server status.'
-          : err.message || 'Registration failed. Please try again.');
+      let errMsg = err.response?.data?.message;
+      if (!errMsg) {
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errMsg = 'Server is starting up (cloud cold start). Please click Register again in 5 seconds.';
+        } else if (err.message === 'Network Error') {
+          errMsg = 'Cannot connect to EduNexa server. Please check your network or server status.';
+        } else {
+          errMsg = err.message || 'Registration failed. Please try again.';
+        }
+      }
       toast.error(errMsg);
     } finally {
       setLoading(false);

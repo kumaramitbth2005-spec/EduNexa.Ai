@@ -83,12 +83,14 @@ exports.createAndSendOtp = async ({ email, name, purpose, resend = false }) => {
     throw new Error(`Unsupported OTP purpose: ${purpose}`);
   }
 
-  // Dispatch email
-  await sendEmail({
+  // Dispatch email asynchronously in background so HTTP response is instant (<100ms)
+  sendEmail({
     to: normalizedEmail,
     subject: emailData.subject,
     text: emailData.text,
     html: emailData.html,
+  }).catch((err) => {
+    console.error(`[BACKGROUND EMAIL FAILED to ${normalizedEmail}]:`, err.message);
   });
 
   return {

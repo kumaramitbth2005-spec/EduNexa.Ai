@@ -68,11 +68,16 @@ export default function Login() {
         });
         return;
       }
-      const errMsg =
-        err.response?.data?.message ||
-        (err.message === 'Network Error'
-          ? 'Cannot connect to EduNexa server. Please check your network or server status.'
-          : err.message || 'Login failed. Please check your credentials.');
+      let errMsg = err.response?.data?.message;
+      if (!errMsg) {
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errMsg = 'Server is starting up (cloud cold start). Please try again in 5 seconds.';
+        } else if (err.message === 'Network Error') {
+          errMsg = 'Cannot connect to EduNexa server. Please check your network or server status.';
+        } else {
+          errMsg = err.message || 'Login failed. Please check your credentials.';
+        }
+      }
       toast.error(errMsg);
     } finally {
       setLoading(false);
