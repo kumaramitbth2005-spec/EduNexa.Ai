@@ -1,180 +1,255 @@
-const nodemailer = require('nodemailer');
+/**
+ * EduNexa Email Service
+ *
+ * Provider selection (EMAIL_PROVIDER env var):
+ *   "resend"    → Resend HTTPS API (recommended — works everywhere, no SMTP ports needed)
+ *   "nodemailer" or unset → Nodemailer Gmail SMTP (requires ports 465/587 open)
+ *
+ * On Render (and most cloud hosts), SMTP ports are blocked.
+ * Use Resend for reliable OTP delivery.
+ */
 
-let cachedTransporter = null;
-let lastUser = null;
-let lastPass = null;
+// ─── RESEND (HTTPS API) ───────────────────────────────────────────────────────
 
-const getTransporter = () => {
-  const user = process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : '';
-  const pass = process.env.EMAIL_APP_PASSWORD
-    ? process.env.EMAIL_APP_PASSWORD.trim().replace(/\s+/g, '') // remove any spaces if user pasted "abcd efgh ijkl mnop"
-    : (process.env.EMAIL_PASS ? process.env.EMAIL_PASS.trim() : '');
+let _resendClient = null;
 
-  if (!user || !pass) {
+const getResendClient = () => {
+  const apiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : '';
+  if (!apiKey) return null;
+  if (_resendClient) return _resendClient;
+  try {
+    const { Resend } = require('resend');
+    _resendClient = new Resend(apiKey);
+    return _resendClient;
+  } catch (err) {
+    console.error('[EMAIL] Failed to initialize Resend client:', err.message);
     return null;
   }
-
-  // Reuse pooled transporter if credentials have not changed
-  if (cachedTransporter && lastUser === user && lastPass === pass) {
-    return cachedTransporter;
-  }
-
-  lastUser = user;
-  lastPass = pass;
-
-  const isGmail = (process.env.EMAIL_HOST || 'smtp.gmail.com').includes('gmail') || user.endsWith('@gmail.com');
-
-  if (isGmail) {
-    cachedTransporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user, pass },
-      pool: true, // Connection pooling maintains open socket to eliminate 3-second handshake latency
-      maxConnections: 3,
-      maxMessages: 100,
-      connectionTimeout: 10000,
-      greetingTimeout: 8000,
-      socketTimeout: 15000,
-    });
-    return cachedTransporter;
-  }
-
-  const port = Number(process.env.EMAIL_PORT) || 465;
-  const isSecure = port === 465;
-
-  cachedTransporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port,
-    secure: isSecure,
-    auth: { user, pass },
-    pool: true,
-    maxConnections: 3,
-    maxMessages: 100,
-    connectionTimeout: 10000,
-    greetingTimeout: 8000,
-    socketTimeout: 15000,
-  });
-
-  return cachedTransporter;
 };
 
-/**
- * Mask email address for safe logging/display (e.g. am***@gmail.com)
- */
-const maskEmail = (email) => {
-  if (!email || !email.includes('@')) return 'configured';
-  const [name, domain] = email.split('@');
-  if (name.length <= 2) return `${name}***@${domain}`;
-  return `${name.slice(0, 2)}***@${domain}`;
-};
-
-/**
- * Verify SMTP connection and authentication status
- */
-exports.verifySmtpConnection = async () => {
-  const transporter = getTransporter();
-  if (!transporter) {
-    return {
-      configured: false,
-      message: 'EMAIL_USER or EMAIL_APP_PASSWORD is not set in backend/.env',
-    };
-  }
-
-  try {
-    await transporter.verify();
-    return {
-      configured: true,
-      authenticated: true,
-      user: maskEmail(process.env.EMAIL_USER),
-      message: 'Gmail SMTP connection authenticated successfully',
-    };
-  } catch (err) {
-    return {
-      configured: true,
-      authenticated: false,
-      user: maskEmail(process.env.EMAIL_USER),
-      error: err.message,
-      message: `Gmail SMTP authentication failed: ${err.message}`,
-    };
-  }
-};
-
-/**
- * Sends an email via Nodemailer (Gmail SMTP with connection pooling)
- * Strictly verifies whether the email was accepted by the provider
- */
-exports.sendEmail = async ({ to, subject, html, text }) => {
-  const user = process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : '';
-  const pass = process.env.EMAIL_APP_PASSWORD ? process.env.EMAIL_APP_PASSWORD.trim() : '';
-
-  if (!user || !pass) {
-    console.warn(`\n[EMAIL ALERT] No EMAIL_USER / EMAIL_APP_PASSWORD configured in backend/.env.`);
-    console.warn(`[EMAIL ALERT] Cannot deliver real OTP to inbox: ${to}`);
-    if (text) console.warn(`[DEVELOPMENT BACKUP]:\n${text}\n`);
+const sendViaResend = async ({ to, subject, html, text, fromAddress }) => {
+  const resend = getResendClient();
+  if (!resend) {
     return {
       success: false,
-      error: 'EMAIL_CONFIG_MISSING',
-      message: 'Email service is not configured on the server. Please configure EMAIL_USER and EMAIL_APP_PASSWORD in backend/.env.',
-    };
-  }
-
-  const transporter = getTransporter();
-  if (!transporter) {
-    return {
-      success: false,
-      error: 'EMAIL_TRANSPORTER_UNAVAILABLE',
-      message: 'Failed to initialize email transporter. Please check email credentials.',
+      error: 'RESEND_NOT_CONFIGURED',
+      message: 'RESEND_API_KEY is not set in backend environment variables. Get a free key at https://resend.com',
     };
   }
 
   const cleanRecipient = (to || '').trim().toLowerCase();
 
-  // Gmail SMTP strictly requires the 'from' address to match the authenticated Gmail user.
-  // Using an external domain (e.g. noreply@edunexa.com) causes Google to reject or spam-filter the message under SPF/DMARC policies.
-  const senderFrom = `"EduNexa Security" <${user}>`;
-
   try {
-    console.log(`[EMAIL DISPATCH] Attempting delivery to ${cleanRecipient} via Gmail SMTP...`);
-
-    const info = await transporter.sendMail({
-      from: senderFrom,
-      to: cleanRecipient,
+    console.log(`[EMAIL] Sending via Resend HTTPS API to ${cleanRecipient}...`);
+    const { data, error } = await resend.emails.send({
+      from: fromAddress || 'EduNexa Security <onboarding@resend.dev>',
+      to: [cleanRecipient],
       subject,
       html,
       text,
     });
 
-    const isAccepted = Array.isArray(info.accepted) && info.accepted.includes(cleanRecipient);
-    console.log(`[EMAIL DISPATCH] Sent to ${cleanRecipient} | Accepted by Gmail: ${isAccepted} | MessageId: ${info.messageId}`);
-
-    if (!isAccepted && Array.isArray(info.rejected) && info.rejected.includes(cleanRecipient)) {
-      console.warn(`[EMAIL REJECTED] Recipient was rejected by SMTP provider: ${cleanRecipient}`);
+    if (error) {
+      console.error('[EMAIL RESEND ERROR]', error.message || JSON.stringify(error));
       return {
         success: false,
-        error: 'RECIPIENT_REJECTED',
-        message: `Recipient email ${cleanRecipient} was rejected by Gmail SMTP.`,
-        messageId: info.messageId,
+        error: 'RESEND_API_ERROR',
+        message: `Resend API rejected the email: ${error.message || JSON.stringify(error)}`,
       };
     }
 
+    console.log(`[EMAIL] Resend accepted the email. ID: ${data.id}`);
     return {
       success: true,
-      messageId: info.messageId,
-      accepted: info.accepted,
-      response: info.response,
+      messageId: data.id,
+      provider: 'resend',
     };
   } catch (err) {
-    console.error(`[EMAIL SMTP ERROR] Failed to send email to ${cleanRecipient}:`, err.message);
-    // Invalidate cached transporter on auth failure so next request can retry fresh
-    if (err.message && (err.message.includes('auth') || err.message.includes('credential') || err.message.includes('Invalid login'))) {
+    console.error('[EMAIL RESEND EXCEPTION]', err.message);
+    return {
+      success: false,
+      error: 'RESEND_EXCEPTION',
+      message: `Resend API call failed: ${err.message}`,
+    };
+  }
+};
+
+// ─── NODEMAILER / GMAIL SMTP ──────────────────────────────────────────────────
+
+let cachedTransporter = null;
+let lastUser = null;
+let lastPass = null;
+
+const getSmtpTransporter = () => {
+  const nodemailer = require('nodemailer');
+  const user = process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : '';
+  const pass = process.env.EMAIL_APP_PASSWORD
+    ? process.env.EMAIL_APP_PASSWORD.trim().replace(/\s+/g, '')
+    : (process.env.EMAIL_PASS ? process.env.EMAIL_PASS.trim() : '');
+
+  if (!user || !pass) return null;
+
+  if (cachedTransporter && lastUser === user && lastPass === pass) return cachedTransporter;
+
+  lastUser = user;
+  lastPass = pass;
+
+  cachedTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass },
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+  });
+
+  return cachedTransporter;
+};
+
+const sendViaSmtp = async ({ to, subject, html, text }) => {
+  const user = process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : '';
+  const pass = process.env.EMAIL_APP_PASSWORD ? process.env.EMAIL_APP_PASSWORD.trim() : '';
+
+  if (!user || !pass) {
+    if (text) console.warn(`[EMAIL DEV BACKUP] OTP for ${to}:\n${text}\n`);
+    return {
+      success: false,
+      error: 'EMAIL_CONFIG_MISSING',
+      message: 'EMAIL_USER and EMAIL_APP_PASSWORD are not configured. Set RESEND_API_KEY instead for reliable delivery.',
+    };
+  }
+
+  const transporter = getSmtpTransporter();
+  if (!transporter) {
+    return {
+      success: false,
+      error: 'SMTP_TRANSPORTER_UNAVAILABLE',
+      message: 'Could not build Nodemailer transporter. Check EMAIL_USER / EMAIL_APP_PASSWORD.',
+    };
+  }
+
+  const cleanRecipient = (to || '').trim().toLowerCase();
+  const senderFrom = `"EduNexa Security" <${user}>`;
+
+  try {
+    console.log(`[EMAIL] Attempting Gmail SMTP delivery to ${cleanRecipient}...`);
+    const info = await transporter.sendMail({ from: senderFrom, to: cleanRecipient, subject, html, text });
+
+    const isAccepted = Array.isArray(info.accepted) && info.accepted.includes(cleanRecipient);
+    console.log(`[EMAIL] Gmail SMTP | Accepted: ${isAccepted} | MessageId: ${info.messageId}`);
+
+    if (!isAccepted && Array.isArray(info.rejected) && info.rejected.includes(cleanRecipient)) {
+      return { success: false, error: 'RECIPIENT_REJECTED', message: `Recipient ${cleanRecipient} was rejected by Gmail SMTP.` };
+    }
+
+    return { success: true, messageId: info.messageId, accepted: info.accepted, provider: 'nodemailer', response: info.response };
+  } catch (err) {
+    console.error(`[EMAIL SMTP ERROR] to ${cleanRecipient}:`, err.message);
+    if (err.message && (err.message.includes('auth') || err.message.includes('Invalid login'))) {
       cachedTransporter = null;
     }
     return {
       success: false,
-      error: 'SMTP_DELIVERY_FAILED',
-      message: `Failed to deliver email via Gmail SMTP: ${err.message}`,
+      error: err.code === 'ETIMEDOUT' || err.message.includes('timeout') ? 'SMTP_TIMEOUT' : 'SMTP_ERROR',
+      message: `Gmail SMTP failed: ${err.message}`,
     };
   }
 };
+
+// ─── UNIFIED PUBLIC API ───────────────────────────────────────────────────────
+
+/**
+ * Determine which email provider is configured and active.
+ * Priority: Resend (HTTPS) > Nodemailer (SMTP)
+ */
+const detectProvider = () => {
+  const explicit = (process.env.EMAIL_PROVIDER || '').toLowerCase().trim();
+  if (explicit === 'nodemailer' || explicit === 'smtp') return 'nodemailer';
+  if (explicit === 'resend') return 'resend';
+  // Auto-detect: prefer Resend when RESEND_API_KEY is set
+  if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim()) return 'resend';
+  if (process.env.EMAIL_USER && process.env.EMAIL_APP_PASSWORD) return 'nodemailer';
+  return 'none';
+};
+
+/**
+ * Main send function — routes to Resend or Nodemailer based on configuration.
+ */
+exports.sendEmail = async ({ to, subject, html, text }) => {
+  const provider = detectProvider();
+
+  if (provider === 'resend') {
+    // Resend free tier requires verified domain OR uses onboarding@resend.dev for testing
+    const resendFrom = process.env.EMAIL_FROM_RESEND || process.env.EMAIL_FROM || 'EduNexa Security <onboarding@resend.dev>';
+    return sendViaResend({ to, subject, html, text, fromAddress: resendFrom });
+  }
+
+  if (provider === 'nodemailer') {
+    return sendViaSmtp({ to, subject, html, text });
+  }
+
+  // No provider configured at all
+  const cleanTo = (to || '').trim();
+  console.warn(`[EMAIL] No email provider configured. Cannot deliver OTP to ${cleanTo}.`);
+  if (text) console.warn(`[EMAIL DEV BACKUP]\n${text}\n`);
+  return {
+    success: false,
+    error: 'NO_EMAIL_PROVIDER',
+    message: 'No email provider configured. Please set RESEND_API_KEY (recommended) or EMAIL_USER + EMAIL_APP_PASSWORD in Render Environment Variables.',
+  };
+};
+
+/**
+ * Verify the configured email provider's connection / credentials.
+ */
+exports.verifySmtpConnection = async () => {
+  const provider = detectProvider();
+
+  if (provider === 'resend') {
+    const resend = getResendClient();
+    if (!resend) {
+      return { configured: false, provider: 'resend', message: 'RESEND_API_KEY is not set.' };
+    }
+    // Resend has no server "ping" — a successful initialization is enough to confirm the key was accepted.
+    // Real validation happens on first send.
+    return {
+      configured: true,
+      provider: 'resend',
+      message: 'Resend client initialized. First send will validate the API key.',
+    };
+  }
+
+  if (provider === 'nodemailer') {
+    const transporter = getSmtpTransporter();
+    if (!transporter) {
+      return { configured: false, provider: 'nodemailer', message: 'EMAIL_USER or EMAIL_APP_PASSWORD is not set.' };
+    }
+    try {
+      await transporter.verify();
+      return {
+        configured: true,
+        authenticated: true,
+        provider: 'nodemailer',
+        message: 'Gmail SMTP authenticated successfully.',
+      };
+    } catch (err) {
+      return {
+        configured: true,
+        authenticated: false,
+        provider: 'nodemailer',
+        error: err.message,
+        message: `Gmail SMTP failed: ${err.message}`,
+      };
+    }
+  }
+
+  return {
+    configured: false,
+    provider: 'none',
+    message: 'No email provider configured. Set RESEND_API_KEY or EMAIL_USER + EMAIL_APP_PASSWORD.',
+  };
+};
+
+// ─── EMAIL TEMPLATES ──────────────────────────────────────────────────────────
 
 /**
  * Template for Registration Email Verification OTP
@@ -242,7 +317,7 @@ exports.getLoginOtpTemplate = (name, otp, expiryMinutes = 5) => {
       </div>
 
       <p style="color: #ef4444; font-size: 13px; line-height: 1.5; margin: 20px 0 0 0;">
-        ⚠️ Never share this code with anyone. EduNexa representatives will never ask for your code.
+        &#9888;&#65039; Never share this code with anyone. EduNexa representatives will never ask for your code.
       </p>
 
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />

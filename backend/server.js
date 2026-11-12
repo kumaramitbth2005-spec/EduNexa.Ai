@@ -260,11 +260,18 @@ app.use(errorHandler);
 // ── Start Server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
+  const emailProvider = process.env.EMAIL_PROVIDER || (process.env.RESEND_API_KEY ? 'resend' : (process.env.EMAIL_USER ? 'nodemailer' : 'none'));
+  const emailStatus = emailProvider === 'resend'
+    ? (process.env.RESEND_API_KEY ? '✅ Resend (HTTPS API)' : '⚠️  Resend selected but RESEND_API_KEY not set')
+    : emailProvider === 'nodemailer'
+    ? (process.env.EMAIL_USER ? '✅ Gmail SMTP' : '⚠️  Nodemailer selected but EMAIL_USER not set')
+    : '⚠️  No email provider configured (set RESEND_API_KEY in Render)';
+
   console.log(`\n🚀 EduNexa Server running on port ${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🤖 AI (Gemini): ${process.env.GEMINI_API_KEY ? '✅ Configured' : '⚠️  Not configured'}`);
   console.log(`📁 Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? '✅ Configured' : '⚠️  Not configured'}`);
-  console.log(`📧 Email: ${process.env.EMAIL_USER ? '✅ Configured' : '⚠️  Not configured'}\n`);
+  console.log(`📧 Email: ${emailStatus}\n`);
 });
 
 module.exports = { app, server, io };

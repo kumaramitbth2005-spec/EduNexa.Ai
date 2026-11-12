@@ -1,75 +1,83 @@
+/**
+ * EduNexa Email Provider Diagnostic Tool
+ * Usage:
+ *   node backend/test_email_diagnostic.js
+ *   node backend/test_email_diagnostic.js your_test_email@gmail.com
+ */
 require('dotenv').config({ path: __dirname + '/.env' });
 const { verifySmtpConnection, sendEmail } = require('./utils/email');
 
-async function runEmailDiagnostic() {
+async function runDiagnostic() {
   console.log('================================================================');
-  console.log('📧 EDUNEXA GMAIL SMTP & OTP DELIVERY DIAGNOSTIC TOOL');
+  console.log('📧  EDUNEXA EMAIL PROVIDER DIAGNOSTIC TOOL');
   console.log('================================================================\n');
 
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_APP_PASSWORD;
+  const provider = process.env.EMAIL_PROVIDER || (process.env.RESEND_API_KEY ? 'resend' : (process.env.EMAIL_USER ? 'nodemailer' : 'none'));
+  console.log(`Active Provider:  ${provider.toUpperCase()}`);
+  console.log(`RESEND_API_KEY:   ${process.env.RESEND_API_KEY ? '✅ Set (' + process.env.RESEND_API_KEY.length + ' chars)' : '❌ Not set'}`);
+  console.log(`EMAIL_USER:       ${process.env.EMAIL_USER ? '✅ ' + process.env.EMAIL_USER.replace(/(?<=.{2}).(?=.*@)/g, '*') : '❌ Not set'}`);
+  console.log(`EMAIL_APP_PASS:   ${process.env.EMAIL_APP_PASSWORD ? '✅ Set' : '❌ Not set'}`);
+  console.log('');
 
-  console.log('1. ENVIRONMENT VARIABLE INSPECTION:');
-  console.log(`- EMAIL_HOST:         ${process.env.EMAIL_HOST || 'smtp.gmail.com (default)'}`);
-  console.log(`- EMAIL_PORT:         ${process.env.EMAIL_PORT || '465 / 587'}`);
-  console.log(`- EMAIL_USER:         ${user ? user.replace(/(?<=.{2}).(?=.*@)/g, '*') : '❌ EMPTY / NOT SET'}`);
-  console.log(`- EMAIL_APP_PASSWORD: ${pass ? '✅ Set (' + pass.length + ' chars)' : '❌ EMPTY / NOT SET'}`);
-  console.log(`- EMAIL_FROM:         ${process.env.EMAIL_FROM || '"EduNexa Security" <' + (user || 'user') + '>'}`);
-
-  if (!user || !pass) {
-    console.log('\n❌ DIAGNOSTIC RESULT: EMAIL CREDENTIALS ARE MISSING IN backend/.env');
+  if (provider === 'none') {
+    console.log('❌ NO EMAIL PROVIDER CONFIGURED');
     console.log('----------------------------------------------------------------');
-    console.log('Why OTP was never delivered to Gmail:');
-    console.log('Nodemailer cannot connect to Google mail servers without an authenticated Gmail account and a 16-character Google App Password.');
-    console.log('\nHOW TO FIX IN 2 MINUTES:');
-    console.log('1. Go to your Google Account (myaccount.google.com).');
-    console.log('2. Click Security on the left menu.');
-    console.log('3. Ensure "2-Step Verification" is ON.');
-    console.log('4. Search "App passwords" in the top search bar (or go to: https://myaccount.google.com/apppasswords).');
-    console.log('5. Create an App password named "EduNexa".');
-    console.log('6. Copy the 16-character password (e.g. "abcd efgh ijkl mnop").');
-    console.log('7. Put it into backend/.env and Render Environment Variables:');
-    console.log('   EMAIL_USER=your_email@gmail.com');
-    console.log('   EMAIL_APP_PASSWORD=abcdefghijklmnop');
-    console.log('================================================================\n');
+    console.log('Quick fix: Set RESEND_API_KEY in Render Environment Variables.');
+    console.log('1. Go to https://resend.com and create a free account.');
+    console.log('2. Create an API key (100 free emails/day).');
+    console.log('3. In Render Dashboard → Your Web Service → Environment:');
+    console.log('   RESEND_API_KEY = re_xxxxxxxxxxxxxxxxxxxx');
+    console.log('   EMAIL_PROVIDER = resend');
+    console.log('4. Click "Save and deploy".');
     return;
   }
 
-  console.log('\n2. TESTING GMAIL SMTP CONNECTION & AUTHENTICATION...');
-  const verifyResult = await verifySmtpConnection();
-  if (verifyResult.authenticated) {
-    console.log(`✅ SUCCESS: ${verifyResult.message}`);
-    console.log(`Authenticated as: ${verifyResult.user}`);
+  if (provider === 'resend') {
+    if (!process.env.RESEND_API_KEY) {
+      console.log('❌ RESEND_API_KEY is missing. Add it to backend/.env or Render Environment Variables.');
+      return;
+    }
+    console.log('✅ Resend client ready.');
+    console.log('NOTE: Resend does not expose a "ping" API. The first send will validate the key.\n');
+  }
 
-    // If an argument is provided, attempt sending real test email
-    const targetRecipient = process.argv[2];
-    if (targetRecipient) {
-      console.log(`\n3. DISPATCHING REAL TEST EMAIL TO: ${targetRecipient}...`);
-      const sendResult = await sendEmail({
-        to: targetRecipient,
-        subject: 'EduNexa - SMTP Verification Test',
-        text: 'This is a test email from EduNexa to confirm that your Gmail SMTP is successfully delivering OTP emails to real inboxes.',
-      });
+  if (provider === 'nodemailer') {
+    console.log('Testing Gmail SMTP connectivity...');
+    const status = await verifySmtpConnection();
+    if (status.authenticated) {
+      console.log(`✅ Gmail SMTP authenticated: ${status.user || process.env.EMAIL_USER}`);
+    } else {
+      console.log('❌ Gmail SMTP failed:', status.error || status.message);
+      console.log('\nCommon causes:');
+      console.log('  - Port 465/587 blocked by ISP or cloud host → Switch to Resend (HTTPS).');
+      console.log('  - Wrong App Password → Generate a 16-char Google App Password at https://myaccount.google.com/apppasswords');
+      return;
+    }
+  }
 
-      if (sendResult.success) {
-        console.log(`✅ EMAIL ACCEPTED BY GMAIL!`);
-        console.log(`- Message ID: ${sendResult.messageId}`);
-        console.log(`- Accepted Recipients: ${sendResult.accepted.join(', ')}`);
-      } else {
-        console.log(`❌ EMAIL REJECTED: ${sendResult.message}`);
-      }
+  // If a recipient was supplied as argument, run a full send test
+  const testRecipient = process.argv[2];
+  if (testRecipient) {
+    console.log(`\nSending real test email to: ${testRecipient} ...`);
+    const result = await sendEmail({
+      to: testRecipient,
+      subject: 'EduNexa Email Delivery Test',
+      text: 'This is a diagnostic test from EduNexa. If you received this, the email provider is working correctly.',
+      html: '<div style="font-family:Arial;padding:20px"><h2 style="color:#4f46e5">EduNexa Test ✅</h2><p>Your email provider is configured and working correctly!</p></div>',
+    });
+
+    if (result.success) {
+      console.log(`✅ Email accepted! Message ID: ${result.messageId}`);
+      console.log(`Check ${testRecipient} inbox AND spam folder.`);
+    } else {
+      console.log(`❌ Delivery failed: ${result.message}`);
     }
   } else {
-    console.log(`❌ SMTP CONNECTION FAILED:`);
-    console.log(`Error: ${verifyResult.error || verifyResult.message}`);
-    if (verifyResult.error && verifyResult.error.includes('Username and Password not accepted')) {
-      console.log('\n👉 EAUTH CAUSE: Google rejected your password.');
-      console.log('   You MUST generate a 16-character Google "App Password" from https://myaccount.google.com/apppasswords.');
-      console.log('   Do NOT use your personal Gmail login password.');
-    }
+    console.log('\nTip: Run with a recipient email to send a live test:');
+    console.log('  node backend/test_email_diagnostic.js your@gmail.com');
   }
 
   console.log('\n================================================================\n');
 }
 
-runEmailDiagnostic().catch(console.error);
+runDiagnostic().catch(console.error);
