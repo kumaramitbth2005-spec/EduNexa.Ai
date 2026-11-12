@@ -10,6 +10,8 @@ const {
   resetPassword,
   logout,
   getMe,
+  checkSmtpStatus,
+  testEmailDelivery,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const { body } = require('express-validator');
@@ -49,5 +51,7 @@ router.post('/forgot-password', body('email').isEmail(), validate, forgotPasswor
 router.post('/reset-password', body('email').isEmail(), body('otp').isLength({ min: 6, max: 6 }), body('password').isLength({ min: 8 }), validate, resetPassword);
 router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
+router.get('/smtp-status', checkSmtpStatus);
+router.post('/test-email', body('email').isEmail().normalizeEmail(), validate, testEmailDelivery);
 
 module.exports = router;

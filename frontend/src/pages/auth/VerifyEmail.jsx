@@ -13,8 +13,13 @@ export default function VerifyEmail() {
   const queryEmail = searchParams.get('email') || '';
   const stateEmail = location.state?.email || '';
   const initialEmail = stateEmail || queryEmail;
+  const initialDelivered = location.state?.emailDelivered !== false;
+  const initialServerMessage = location.state?.serverMessage || '';
 
   const [email, setEmail] = useState(initialEmail);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailDelivered, setEmailDelivered] = useState(initialDelivered);
+  const [serverNotice, setServerNotice] = useState(initialServerMessage);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -116,7 +121,9 @@ export default function VerifyEmail() {
     try {
       setResending(true);
       const res = await resendOtp({ email, purpose: 'email_verification' });
-      toast.success(res.message || 'A fresh verification code has been dispatched.');
+      toast.success(res.message || 'A fresh verification code has been dispatched to your email.');
+      setEmailDelivered(true);
+      setServerNotice('');
       setCooldown(60);
       setTimeLeft(300);
       setOtp(['', '', '', '', '', '']);
@@ -173,9 +180,49 @@ export default function VerifyEmail() {
             </div>
           </div>
         ) : (
-          <div className="mb-6 p-3 rounded-xl bg-primary-50 dark:bg-primary-950/50 border border-primary-200 dark:border-primary-800 text-center">
-            <span className="text-xs text-primary-600 dark:text-primary-400 font-medium">Verification Code Sent To:</span>
-            <p className="text-sm font-semibold text-primary-900 dark:text-primary-200 mt-0.5">{email}</p>
+          <div className="mb-6 p-3 rounded-xl bg-primary-50 dark:bg-primary-950/50 border border-primary-200 dark:border-primary-800">
+            <div className="flex items-center justify-between text-xs text-primary-600 dark:text-primary-400 font-medium mb-1">
+              <span>Verification Code Sent To:</span>
+              <button
+                type="button"
+                onClick={() => setEditingEmail((prev) => !prev)}
+                className="hover:underline font-semibold"
+              >
+                {editingEmail ? 'Done' : 'Change'}
+              </button>
+            </div>
+            {editingEmail ? (
+              <div className="flex gap-2 mt-1">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="input py-1 text-xs"
+                  placeholder="Enter correct email"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEditingEmail(false)}
+                  className="btn-primary text-xs px-3 py-1"
+                >
+                  Save
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm font-semibold text-primary-900 dark:text-primary-200 text-center">{email}</p>
+            )}
+          </div>
+        )}
+
+        {/* Notice if email delivery failed */}
+        {!emailDelivered && (
+          <div className="mb-6 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-200">
+            <p className="font-semibold flex items-center gap-1.5">
+              <span>⚠️ Verification Email Status:</span>
+            </p>
+            <p className="mt-1 leading-relaxed opacity-90">
+              {serverNotice || 'Email could not be delivered to your inbox. Check server SMTP settings or click "Resend Code" below.'}
+            </p>
           </div>
         )}
 

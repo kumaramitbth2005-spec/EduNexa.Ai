@@ -57,11 +57,21 @@ export default function Register() {
       setLoading(true);
       const res = await register(formData);
 
-      toast.success(res.message || 'Registration successful! Verification code sent to your email.');
+      if (res.emailDelivered === false) {
+        toast.error(res.message || 'Account created, but verification email could not be sent. Please click Resend Code.', {
+          duration: 7000,
+        });
+      } else {
+        toast.success(res.message || 'Registration successful! Verification code sent to your email.');
+      }
 
       // Redirect immediately to email verification OTP page
       navigate('/verify-email', {
-        state: { email: formData.email.toLowerCase().trim() },
+        state: {
+          email: formData.email.toLowerCase().trim(),
+          emailDelivered: res.emailDelivered !== false,
+          serverMessage: res.message,
+        },
       });
     } catch (err) {
       let errMsg = err.response?.data?.message;

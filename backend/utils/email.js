@@ -1,65 +1,178 @@
 const nodemailer = require('nodemailer');
 
+let cachedTransporter = null;
+let lastUser = null;
+let lastPass = null;
+
 const getTransporter = () => {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
+  const user = process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : '';
+  const pass = process.env.EMAIL_APP_PASSWORD
+    ? process.env.EMAIL_APP_PASSWORD.trim().replace(/\s+/g, '') // remove any spaces if user pasted "abcd efgh ijkl mnop"
+    : (process.env.EMAIL_PASS ? process.env.EMAIL_PASS.trim() : '');
 
   if (!user || !pass) {
     return null;
   }
 
-  // Support Gmail service configuration or custom SMTP
+  // Reuse pooled transporter if credentials have not changed
+  if (cachedTransporter && lastUser === user && lastPass === pass) {
+    return cachedTransporter;
+  }
+
+  lastUser = user;
+  lastPass = pass;
+
   const isGmail = (process.env.EMAIL_HOST || 'smtp.gmail.com').includes('gmail') || user.endsWith('@gmail.com');
 
   if (isGmail) {
-    return nodemailer.createTransport({
+    cachedTransporter = nodemailer.createTransport({
       service: 'gmail',
       auth: { user, pass },
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 8000,
+      pool: true, // Connection pooling maintains open socket to eliminate 3-second handshake latency
+      maxConnections: 3,
+      maxMessages: 100,
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      socketTimeout: 15000,
     });
+    return cachedTransporter;
   }
 
-  return nodemailer.createTransport({
+  const port = Number(process.env.EMAIL_PORT) || 465;
+  const isSecure = port === 465;
+
+  cachedTransporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: Number(process.env.EMAIL_PORT) || 587,
-    secure: Number(process.env.EMAIL_PORT) === 465,
+    port,
+    secure: isSecure,
     auth: { user, pass },
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 8000,
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 100,
+    connectionTimeout: 10000,
+    greetingTimeout: 8000,
+    socketTimeout: 15000,
   });
+
+  return cachedTransporter;
 };
 
 /**
- * Sends an email via Nodemailer (Gmail SMTP)
+ * Mask email address for safe logging/display (e.g. am***@gmail.com)
+ */
+const maskEmail = (email) => {
+  if (!email || !email.includes('@')) return 'configured';
+  const [name, domain] = email.split('@');
+  if (name.length <= 2) return `${name}***@${domain}`;
+  return `${name.slice(0, 2)}***@${domain}`;
+};
+
+/**
+ * Verify SMTP connection and authentication status
+ */
+exports.verifySmtpConnection = async () => {
+  const transporter = getTransporter();
+  if (!transporter) {
+    return {
+      configured: false,
+      message: 'EMAIL_USER or EMAIL_APP_PASSWORD is not set in backend/.env',
+    };
+  }
+
+  try {
+    await transporter.verify();
+    return {
+      configured: true,
+      authenticated: true,
+      user: maskEmail(process.env.EMAIL_USER),
+      message: 'Gmail SMTP connection authenticated successfully',
+    };
+  } catch (err) {
+    return {
+      configured: true,
+      authenticated: false,
+      user: maskEmail(process.env.EMAIL_USER),
+      error: err.message,
+      message: `Gmail SMTP authentication failed: ${err.message}`,
+    };
+  }
+};
+
+/**
+ * Sends an email via Nodemailer (Gmail SMTP with connection pooling)
+ * Strictly verifies whether the email was accepted by the provider
  */
 exports.sendEmail = async ({ to, subject, html, text }) => {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
+  const user = process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : '';
+  const pass = process.env.EMAIL_APP_PASSWORD ? process.env.EMAIL_APP_PASSWORD.trim() : '';
 
   if (!user || !pass) {
-    console.warn(`\n[EMAIL NOTICE] No EMAIL_USER/EMAIL_APP_PASSWORD configured in backend/.env.`);
-    console.warn(`[EMAIL SIMULATION] To: ${to} | Subject: ${subject}`);
-    if (text) console.warn(`[EMAIL BODY]:\n${text}\n`);
-    return { success: true, simulated: true };
+    console.warn(`\n[EMAIL ALERT] No EMAIL_USER / EMAIL_APP_PASSWORD configured in backend/.env.`);
+    console.warn(`[EMAIL ALERT] Cannot deliver real OTP to inbox: ${to}`);
+    if (text) console.warn(`[DEVELOPMENT BACKUP]:\n${text}\n`);
+    return {
+      success: false,
+      error: 'EMAIL_CONFIG_MISSING',
+      message: 'Email service is not configured on the server. Please configure EMAIL_USER and EMAIL_APP_PASSWORD in backend/.env.',
+    };
   }
 
   const transporter = getTransporter();
+  if (!transporter) {
+    return {
+      success: false,
+      error: 'EMAIL_TRANSPORTER_UNAVAILABLE',
+      message: 'Failed to initialize email transporter. Please check email credentials.',
+    };
+  }
+
+  const cleanRecipient = (to || '').trim().toLowerCase();
+
+  // Gmail SMTP strictly requires the 'from' address to match the authenticated Gmail user.
+  // Using an external domain (e.g. noreply@edunexa.com) causes Google to reject or spam-filter the message under SPF/DMARC policies.
+  const senderFrom = `"EduNexa Security" <${user}>`;
+
   try {
+    console.log(`[EMAIL DISPATCH] Attempting delivery to ${cleanRecipient} via Gmail SMTP...`);
+
     const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || `"EduNexa Security" <${user}>`,
-      to,
+      from: senderFrom,
+      to: cleanRecipient,
       subject,
       html,
       text,
     });
-    console.log(`[EMAIL DELIVERED] Successfully sent email to ${to} (MessageId: ${info.messageId})`);
-    return { success: true, messageId: info.messageId };
+
+    const isAccepted = Array.isArray(info.accepted) && info.accepted.includes(cleanRecipient);
+    console.log(`[EMAIL DISPATCH] Sent to ${cleanRecipient} | Accepted by Gmail: ${isAccepted} | MessageId: ${info.messageId}`);
+
+    if (!isAccepted && Array.isArray(info.rejected) && info.rejected.includes(cleanRecipient)) {
+      console.warn(`[EMAIL REJECTED] Recipient was rejected by SMTP provider: ${cleanRecipient}`);
+      return {
+        success: false,
+        error: 'RECIPIENT_REJECTED',
+        message: `Recipient email ${cleanRecipient} was rejected by Gmail SMTP.`,
+        messageId: info.messageId,
+      };
+    }
+
+    return {
+      success: true,
+      messageId: info.messageId,
+      accepted: info.accepted,
+      response: info.response,
+    };
   } catch (err) {
-    console.error(`[EMAIL ERROR] Failed to send email to ${to}:`, err.message);
-    throw err;
+    console.error(`[EMAIL SMTP ERROR] Failed to send email to ${cleanRecipient}:`, err.message);
+    // Invalidate cached transporter on auth failure so next request can retry fresh
+    if (err.message && (err.message.includes('auth') || err.message.includes('credential') || err.message.includes('Invalid login'))) {
+      cachedTransporter = null;
+    }
+    return {
+      success: false,
+      error: 'SMTP_DELIVERY_FAILED',
+      message: `Failed to deliver email via Gmail SMTP: ${err.message}`,
+    };
   }
 };
 

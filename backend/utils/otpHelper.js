@@ -83,18 +83,30 @@ exports.createAndSendOtp = async ({ email, name, purpose, resend = false }) => {
     throw new Error(`Unsupported OTP purpose: ${purpose}`);
   }
 
-  // Dispatch email asynchronously in background so HTTP response is instant (<100ms)
-  sendEmail({
+  // Dispatch email and verify acceptance from email provider
+  const sendResult = await sendEmail({
     to: normalizedEmail,
     subject: emailData.subject,
     text: emailData.text,
     html: emailData.html,
-  }).catch((err) => {
-    console.error(`[BACKGROUND EMAIL FAILED to ${normalizedEmail}]:`, err.message);
   });
+
+  if (!sendResult.success) {
+    return {
+      success: false,
+      delivered: false,
+      error: sendResult.error,
+      message: sendResult.message,
+      expiresInMinutes: OTP_EXPIRY_MINUTES,
+      cooldownSeconds: RESEND_COOLDOWN_SECONDS,
+    };
+  }
 
   return {
     success: true,
+    delivered: true,
+    messageId: sendResult.messageId,
+    accepted: sendResult.accepted,
     expiresInMinutes: OTP_EXPIRY_MINUTES,
     cooldownSeconds: RESEND_COOLDOWN_SECONDS,
   };

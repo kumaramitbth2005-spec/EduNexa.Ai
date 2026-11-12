@@ -43,7 +43,12 @@ const otpSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// High-performance compound indexes for instant queries during registration & verification
+otpSchema.index({ email: 1, purpose: 1, isUsed: 1 });
+otpSchema.index({ email: 1, purpose: 1, createdAt: -1 });
+
 // Automatic TTL deletion after expiration
 otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model('Otp', otpSchema);
+
